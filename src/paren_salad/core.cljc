@@ -104,41 +104,53 @@
   (and (= parinfer :indent)
        (not= cursor-line current-line)))
 
-(defn read-coll [flat-tokens [_ delim :as token-data] *index opts]
+(defn add-delim [data end-delim]
+  (conj data [:delimiter end-delim]))
+
+(defn read-coll [flat-tokens [_ delim :as token-data] *index *top-level-error? opts]
   (let [end-delim (delims delim)
         indent (-> token-data meta :indent)]
     (loop [data [token-data]
            line (-> token-data meta :start-line)]
-      (if-let [[_ token :as token-data] (read-structured-token flat-tokens *index opts)]
+      (if-let [[_ token :as token-data] (read-structured-token flat-tokens *index *top-level-error? opts)]
         (cond
           (and (indent-mode? opts line)
-               (< (-> token-data meta :indent) indent))
+               (< (-> token-data meta :indent) indent)
+               (not @*top-level-error?))
           (do
             (vswap! *index dec) ;; read token again later
-            (wrap-coll (conj data [:delimiter end-delim])))
+            (wrap-coll (add-delim data end-delim)))
           (= token end-delim)
           (wrap-coll (conj data token-data))
           (close-delims token)
-          (if (indent-mode? opts line)
-            (wrap-coll (conj data [:delimiter end-delim]))
+          (if (and (indent-mode? opts line)
+                   (not @*top-level-error?))
+            (wrap-coll (add-delim data end-delim))
             (vary-meta (wrap-coll (conj data token-data))
               assoc :error-message "Unmatched delimiter"))
           :else
           (recur (conj data token-data) (-> token-data meta :start-line)))
-        (if (indent-mode? opts line)
-          (wrap-coll (conj data [:delimiter end-delim]))
+        (if (and (indent-mode? opts line)
+                 (not @*top-level-error?))
+          (wrap-coll (add-delim data end-delim))
           (vary-meta (wrap-coll data)
             assoc :error-message "EOF while reading"))))))
 
-(defn read-structured-token [flat-tokens *index opts]
-  (when-let [[_ token :as token-data] (get flat-tokens (vswap! *index inc))]
+(defn read-structured-token [flat-tokens *index *top-level-error? opts]
+  (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
     (cond
       (open-delims token)
-      (read-coll flat-tokens token-data *index opts)
+      (read-coll flat-tokens token-data *index *top-level-error? opts)
       (close-delims token)
       (if (indent-mode? opts (-> token-data meta :start-line))
         nil
         (vary-meta token-data assoc :error-message "Unmatched delimiter"))
+      (and (= group :string)
+           (not (str/ends-with? token "\"")))
+      (do
+        (vreset! *top-level-error? true)
+        (vary-meta token-data assoc
+          :error-message "Incomplete string"))
       :else
       token-data)))
 
@@ -156,7 +168,7 @@
                     (persistent! tokens)))
          *index (volatile! -1)]
      (loop [structured-tokens []]
-       (if-let [token (read-structured-token tokens *index opts)]
+       (if-let [token (read-structured-token tokens *index (volatile! false) opts)]
          (recur (conj structured-tokens token))
          structured-tokens)))))
 
