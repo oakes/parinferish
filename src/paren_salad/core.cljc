@@ -87,14 +87,24 @@
                      :indent indent)]
     token-data))
 
+(declare read-structured-token)
+
 (defn wrap-coll [data]
-  (into [:collection] data))
+  (let [first-meta (-> data first meta)
+        last-meta (-> data last meta)]
+    (vary-meta (into [:collection] data)
+      assoc
+      :start-line (:start-line first-meta)
+      :start-column (:start-column first-meta)
+      :end-line (:end-line last-meta)
+      :end-column (:end-column last-meta)
+      :indent (:indent first-meta))))
 
 (defn read-coll [flat-tokens [_ delim :as token-data] *index {:keys [parinfer] :as opts}]
   (let [end-delim (delims delim)
         indent (-> token-data meta :indent)]
     (loop [data [token-data]]
-      (if-let [[_ token :as token-data] (get flat-tokens (vswap! *index inc))]
+      (if-let [[_ token :as token-data] (read-structured-token flat-tokens *index opts)]
         (cond
           (and (= :indent parinfer)
                (< (-> token-data meta :indent) indent))
