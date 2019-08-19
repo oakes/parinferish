@@ -1,6 +1,6 @@
 (ns paren-salad.core
   (:require [clojure.string :as str])
-  (:refer-clojure :exclude [find])
+  (:refer-clojure :exclude [find flatten])
   #?(:clj (:import [java.util.regex Pattern Matcher])))
 
 (def group-names [:newline-and-indent
@@ -153,4 +153,15 @@
        (if-let [token (read-structured-token tokens *index opts)]
          (recur (conj structured-tokens token))
          structured-tokens)))))
+
+(defn node->str [node]
+  (if (vector? node)
+    (let [[type & children] node]
+      (str/join (map node->str children)))
+    node))
+
+(defn flatten [parsed-code]
+  (->> parsed-code
+       (mapv node->str)
+       str/join))
 
