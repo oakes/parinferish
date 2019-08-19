@@ -1,3 +1,6 @@
 {:paths ["src"]
- :aliases {:prod {:extra-deps {leiningen {:mvn/version "2.9.0"}}
+ :aliases {:test {:extra-deps {org.clojure/data.json {:mvn/version "0.2.6"}}
+                  :extra-paths ["test-resources"]
+                  :main-opts ["test.clj"]}
+           :prod {:extra-deps {leiningen {:mvn/version "2.9.0"}}
                   :main-opts ["prod.clj"]}}}
