@@ -79,7 +79,7 @@
           (vary-meta (wrap-coll data)
             assoc :error-message "EOF while reading"))))))
 
-(defn read-token [matcher {:keys [*line *column] :as opts}]
+(defn read-token [matcher {:keys [*line *column *indent] :as opts}]
   (let [token (group matcher 0)
         group (get group-names
                 (some #(when (group matcher (inc %)) %) group-range)
@@ -92,6 +92,13 @@
         end-column (if (= group :newline-and-indent)
                      (vreset! *column (dec (count token)))
                      (vswap! *column + (count token)))
+        indent (cond
+                 (open-delims token)
+                 (vswap! *indent + (count token))
+                 (= group :newline-and-indent)
+                 (vreset! *indent (dec (count token)))
+                 :else
+                 @*indent)
         token-data [(if (and (= group :symbol)
                              (str/starts-with? token ":"))
                       :keyword
@@ -101,7 +108,8 @@
                      :start-line start-line
                      :start-column start-column
                      :end-line end-line
-                     :end-column end-column)]
+                     :end-column end-column
+                     :indent indent)]
     (if (and (= group :delimiter)
              (open-delims token))
       (read-coll matcher token-data opts)
@@ -112,7 +120,7 @@
    (parse s {}))
   ([s opts]
    (let [matcher (->regex s)
-         opts (assoc opts :*line (volatile! 0) :*column (volatile! 0))]
+         opts (assoc opts :*line (volatile! 0) :*column (volatile! 0) :*indent (volatile! 0))]
      (loop [data []]
        (if (find matcher)
          (let [token (read-token matcher opts)]
