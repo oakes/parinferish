@@ -8,11 +8,18 @@
                        io/resource
                        slurp
                        json/read-str)]
-  (let [{:strs [text result]} test-case
-        ps-result (-> text (ps/parse {:parinfer :indent}) ps/flatten)]
+  (let [{:strs [text result options]} test-case
+        opts {:parinfer :indent
+              :cursor-line (get options "cursorLine")
+              :cursor-column (get options "cursorX")}
+        ps-data (ps/parse text opts)
+        ps-result (ps/flatten ps-data)]
     (when-not (= (get result "text") ps-result)
       (println "Test failed:")
+      (println (pr-str ps-data))
+      (println "Options:" options)
       (println "Input:" (pr-str text))
       (println "Output:" (pr-str ps-result))
       (println "Expected:" (pr-str (get result "text")))
-      (println))))
+      (println)
+      #_(System/exit 0))))
