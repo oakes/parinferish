@@ -68,23 +68,25 @@
             (= token end-delim)
             (wrap-coll (conj data token-data))
             (close-delims token)
-            (vary-meta (wrap-coll (conj data token-data))
-              assoc :error-message "Unmatched delimiter")
+            (if (= :indent (:parinfer opts))
+              (wrap-coll (conj data [:delimiter end-delim]))
+              (vary-meta (wrap-coll (conj data token-data))
+                assoc :error-message "Unmatched delimiter"))
             :else
             (recur (conj data token-data))))
-        (vary-meta (wrap-coll data)
-          assoc :error-message "EOF while reading")))))
+        (if (= :indent (:parinfer opts))
+          (wrap-coll (conj data [:delimiter end-delim]))
+          (vary-meta (wrap-coll data)
+            assoc :error-message "EOF while reading"))))))
 
 (defn read-token [matcher opts]
   (let [token (group matcher 0)
         group (get group-names
                 (some #(when (group matcher (inc %)) %) group-range)
                 :whitespace)]
-    (if (= group :delimiter)
-      (if (open-delims token)
-        (read-coll matcher [group token] opts)
-        (vary-meta [group token] assoc
-          :error-message "Unmatched delimiter"))
+    (if (and (= group :delimiter)
+             (open-delims token))
+      (read-coll matcher [group token] opts)
       [(if (and (= group :symbol)
                 (str/starts-with? token ":"))
          :keyword
@@ -98,6 +100,11 @@
    (let [matcher (->regex s)]
      (loop [data []]
        (if (find matcher)
-         (recur (conj data (read-token matcher opts)))
+         (let [token (read-token matcher opts)]
+           (if (close-delims token)
+             (if (= :indent (:parinfer opts))
+               (recur data)
+               (recur (conj data (vary-meta token assoc :error-message "Unmatched delimiter"))))
+             (recur (conj data token))))
          data)))))
 
