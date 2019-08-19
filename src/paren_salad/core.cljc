@@ -100,13 +100,18 @@
       :end-column (:end-column last-meta)
       :indent (:indent first-meta))))
 
-(defn read-coll [flat-tokens [_ delim :as token-data] *index {:keys [parinfer] :as opts}]
+(defn indent-mode? [{:keys [parinfer cursor-line] :as opts} current-line]
+  (and (= parinfer :indent)
+       (not= cursor-line current-line)))
+
+(defn read-coll [flat-tokens [_ delim :as token-data] *index opts]
   (let [end-delim (delims delim)
         indent (-> token-data meta :indent)]
-    (loop [data [token-data]]
+    (loop [data [token-data]
+           line (-> token-data meta :start-line)]
       (if-let [[_ token :as token-data] (read-structured-token flat-tokens *index opts)]
         (cond
-          (and (= :indent parinfer)
+          (and (indent-mode? opts line)
                (< (-> token-data meta :indent) indent))
           (do
             (vswap! *index dec) ;; read token again later
@@ -114,13 +119,13 @@
           (= token end-delim)
           (wrap-coll (conj data token-data))
           (close-delims token)
-          (if (= :indent parinfer)
+          (if (indent-mode? opts line)
             (wrap-coll (conj data [:delimiter end-delim]))
             (vary-meta (wrap-coll (conj data token-data))
               assoc :error-message "Unmatched delimiter"))
           :else
-          (recur (conj data token-data)))
-        (if (= :indent parinfer)
+          (recur (conj data token-data) (-> token-data meta :start-line)))
+        (if (indent-mode? opts line)
           (wrap-coll (conj data [:delimiter end-delim]))
           (vary-meta (wrap-coll data)
             assoc :error-message "EOF while reading"))))))
@@ -131,7 +136,8 @@
       (open-delims token)
       (read-coll flat-tokens token-data *index opts)
       (close-delims token)
-      (when-not (= :indent (:parinfer opts))
+      (if (indent-mode? opts (-> token-data meta :start-line))
+        nil
         (vary-meta token-data assoc :error-message "Unmatched delimiter"))
       :else
       token-data)))
