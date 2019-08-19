@@ -144,10 +144,10 @@
          *line (volatile! 0)
          *column (volatile! 0)
          *indent (volatile! 0)
-         tokens (loop [tokens []]
+         tokens (loop [tokens (transient [])]
                   (if (find matcher)
-                    (recur (conj tokens (read-token matcher *line *column *indent)))
-                    tokens))
+                    (recur (conj! tokens (read-token matcher *line *column *indent)))
+                    (persistent! tokens)))
          *index (volatile! -1)]
      (loop [structured-tokens []]
        (if-let [token (read-structured-token tokens *index opts)]
