@@ -3,7 +3,8 @@
   (:refer-clojure :exclude [find])
   #?(:clj (:import [java.util.regex Pattern Matcher])))
 
-(def group-names [:whitespace
+(def group-names [:newline-and-indent
+                  :whitespace
                   :special-char
                   :delimiter
                   :string
@@ -11,7 +12,8 @@
                   :number
                   :symbol])
 
-(def groups ["([\\s,]+)"                   ;; whitespace
+(def groups ["(\n[ ]*)"                    ;; newline-and-indent
+             "([\\s,]+)"                   ;; whitespace
              "(~@|['`~^@])"                ;; special-char
              "([\\[\\]{}()]|#\\{)"         ;; delimiter
              "(\"(?:\\\\.|[^\\\\\"])*\"?)" ;; string
@@ -57,41 +59,45 @@
 (defn wrap-coll [data]
   (into [:collection] data))
 
-(defn read-coll [matcher [_ delim :as token-data]]
+(defn read-coll [matcher [_ delim :as token-data] opts]
   (let [end-delim (delims delim)]
     (loop [data [token-data]]
       (if (find matcher)
-        (let [[_ token :as token-data] (read-token matcher)
-              data (conj data token-data)]
+        (let [[_ token :as token-data] (read-token matcher opts)]
           (cond
             (= token end-delim)
-            (wrap-coll data)
+            (wrap-coll (conj data token-data))
             (close-delims token)
-            (vary-meta (wrap-coll data)
+            (vary-meta (wrap-coll (conj data token-data))
               assoc :error-message "Unmatched delimiter")
             :else
-            (recur data)))
+            (recur (conj data token-data))))
         (vary-meta (wrap-coll data)
           assoc :error-message "EOF while reading")))))
 
-(defn read-token [matcher]
+(defn read-token [matcher opts]
   (let [token (group matcher 0)
         group (get group-names
                 (some #(when (group matcher (inc %)) %) group-range)
                 :whitespace)]
-    (if (and (= group :delimiter)
-             (open-delims token))
-      (read-coll matcher [group token])
+    (if (= group :delimiter)
+      (if (open-delims token)
+        (read-coll matcher [group token] opts)
+        (vary-meta [group token] assoc
+          :error-message "Unmatched delimiter"))
       [(if (and (= group :symbol)
                 (str/starts-with? token ":"))
          :keyword
          group)
       token])))
 
-(defn parse [s]
-  (let [matcher (->regex s)]
-    (loop [data []]
-      (if (find matcher)
-        (recur (conj data (read-token matcher)))
-        data))))
+(defn parse
+  ([s]
+   (parse s {}))
+  ([s opts]
+   (let [matcher (->regex s)]
+     (loop [data []]
+       (if (find matcher)
+         (recur (conj data (read-token matcher opts)))
+         data)))))
 
