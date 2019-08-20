@@ -3,41 +3,44 @@
   (:refer-clojure :exclude [find flatten])
   #?(:clj (:import [java.util.regex Pattern Matcher])))
 
-(def group-names [:newline-and-indent
-                  :whitespace
-                  :special-char
-                  :delimiter
-                  :string
-                  :character
-                  :backslash
-                  :comment
-                  :number
-                  :symbol])
+(def ^:private group-names
+  [:newline-and-indent
+   :whitespace
+   :special-char
+   :delimiter
+   :string
+   :character
+   :backslash
+   :comment
+   :number
+   :symbol])
 
-(def non-code-groups #{:newline-and-indent :whitespace :comment})
+(def ^:private non-code-groups
+  #{:newline-and-indent :whitespace :comment})
 
-(def groups ["(\n[ ]*)"                        ;; newline-and-indent
-             "([\\s,]+)"                       ;; whitespace
-             "(~@|['`~^@])"                    ;; special-char
-             "([\\[\\]{}()]|#\\{)"             ;; delimiter
-             "(\"(?:\\\\.|[^\\\\\"])*\"?)"     ;; string
-             "(\\\\\\S)"                       ;; character
-             "(\\\\)"                          ;; backslash
-             "(;.*)"                           ;; comment
-             "(\\d+\\.?[a-zA-Z\\d]*)"          ;; number
-             "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]) ;; symbol
+(def ^:private groups
+  ["(\n[ ]*)"                        ;; newline-and-indent
+   "([\\s,]+)"                       ;; whitespace
+   "(~@|['`~^@])"                    ;; special-char
+   "([\\[\\]{}()]|#\\{)"             ;; delimiter
+   "(\"(?:\\\\.|[^\\\\\"])*\"?)"     ;; string
+   "(\\\\\\S)"                       ;; character
+   "(\\\\)"                          ;; backslash
+   "(;.*)"                           ;; comment
+   "(\\d+\\.?[a-zA-Z\\d]*)"          ;; number
+   "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]) ;; symbol
 
-(def group-range (range 0 (count group-names)))
+(def ^:private group-range (range 0 (count group-names)))
 
-(def regex-str (str/join "|" groups))
-(def regex (re-pattern regex-str))
+(def ^:private regex-str (str/join "|" groups))
+(def ^:private regex (re-pattern regex-str))
 
-(def open-delims #{"#{" "(" "[" "{"})
-(def close-delims #{"}" ")" "]"})
-(def delims {"#{" "}"
-             "(" ")"
-             "[" "]"
-             "{" "}"})
+(def ^:private open-delims #{"#{" "(" "[" "{"})
+(def ^:private close-delims #{"}" ")" "]"})
+(def ^:private delims {"#{" "}"
+                       "(" ")"
+                       "[" "]"
+                       "{" "}"})
 
 (defprotocol IRegex
   (find [this])
@@ -60,7 +63,7 @@
         #?(:clj  (.start ^Matcher *matcher)
            :cljs (.-index @*matcher))))))
 
-(defn read-token [matcher *error?]
+(defn- read-token [matcher *error?]
   (let [token (group matcher 0)
         group (get group-names
                 (some #(when (group matcher (inc %)) %) group-range)
@@ -77,7 +80,7 @@
 
 (declare read-structured-token)
 
-(defn wrap-coll [data]
+(defn- wrap-coll [data]
   (let [first-meta (-> data first meta)
         last-meta (-> data last meta)]
     (vary-meta (into [:collection] data)
@@ -88,7 +91,7 @@
       :end-column (:end-column last-meta)
       :indent (:indent first-meta))))
 
-(defn add-delim [data end-delim {:keys [*line *column]}]
+(defn- add-delim [data end-delim {:keys [*line *column]}]
   (let [line @*line
         column @*column
         token-data (vary-meta [:delimiter end-delim] assoc
@@ -105,7 +108,7 @@
     (into (conj first-data token-data)
           last-data)))
 
-(defn read-coll [flat-tokens [_ delim :as token-data] {:keys [*index parinfer] :as opts}]
+(defn- read-coll [flat-tokens [_ delim :as token-data] {:keys [*index parinfer] :as opts}]
   (let [end-delim (delims delim)
         indent (-> token-data meta :indent)]
     (loop [data [token-data]]
@@ -130,7 +133,7 @@
           (vary-meta (wrap-coll data)
             assoc :error-message "EOF while reading"))))))
 
-(defn read-structured-token [flat-tokens {:keys [*line *column *indent *index] :as opts}]
+(defn- read-structured-token [flat-tokens {:keys [*line *column *indent *index] :as opts}]
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
     (let [start-line @*line
           start-column @*column
@@ -157,7 +160,7 @@
         (read-coll flat-tokens token-data opts)
         token-data))))
 
-(defn read-useful-token [flat-tokens {:keys [parinfer] :as opts}]
+(defn- read-useful-token [flat-tokens {:keys [parinfer] :as opts}]
   (when-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
     (cond
       (close-delims token)
@@ -188,7 +191,7 @@
          (recur (conj structured-tokens token-data))
          structured-tokens)))))
 
-(defn node->str [node]
+(defn- node->str [node]
   (if (vector? node)
     (let [[type & children] node]
       (str/join (map node->str children)))
