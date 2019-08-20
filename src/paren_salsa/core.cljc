@@ -98,6 +98,26 @@
     (into (conj first-data token-data)
           last-data)))
 
+(defn- read-next-tokens-with-indent [flat-tokens {:keys [*index] :as opts} indent]
+  (loop [tokens []]
+    (if-let [[group _ :as token-data] (read-structured-token flat-tokens opts)]
+      (if (and (not= group :delimiter)
+               (>= (-> token-data meta :indent) indent))
+        (recur (conj tokens token-data))
+        (do
+          (vswap! *index dec)
+          tokens))
+      tokens)))
+
+(defn- read-next-useful-tokens-with-indent [flat-tokens {:keys [*index] :as opts} indent]
+  (let [tokens (read-next-tokens-with-indent flat-tokens opts indent)]
+    (if (and (seq tokens)
+             (->> tokens (map first) (every? non-code-groups)))
+      (do
+        (vswap! *index - (count tokens))
+        [])
+      tokens)))
+
 (defn- read-coll [flat-tokens [_ delim :as token-data] {:keys [*index parinfer] :as opts}]
   (let [end-delim (delims delim)
         indent (-> token-data meta :indent)]
@@ -110,7 +130,12 @@
             (vswap! *index dec) ;; read token again later
             (wrap-coll (add-delim data end-delim opts)))
           (= token end-delim)
-          (wrap-coll (conj data token-data))
+          (if (= :indent parinfer)
+            (-> data
+                (into (read-next-useful-tokens-with-indent flat-tokens opts indent))
+                (conj token-data)
+                wrap-coll)
+            (wrap-coll (conj data token-data)))
           (close-delims token)
           (if (= :indent parinfer)
             (wrap-coll (add-delim data end-delim opts))
