@@ -76,10 +76,17 @@
     (vary-meta (into [:collection] data)
       assoc :indent (:indent first-meta))))
 
-(defn- add-delim [data end-delim]
+(defn- insert-token [data token-data]
+  (conj data (vary-meta token-data assoc :action :insert)))
+
+(defn- remove-token [data token-data]
+  (conj data (vary-meta token-data assoc :action :remove)))
+
+(defn- insert-delim [data end-delim]
   (let [first-meta (-> data first meta)
-        token-data (vary-meta [:delimiter end-delim]
-                     assoc :indent (:indent first-meta))
+        token-data (vary-meta [:delimiter end-delim] assoc
+                     :indent (:indent first-meta)
+                     :action :insert)
         [last-data first-data]
         (->> data
              reverse
@@ -119,23 +126,37 @@
                (< (-> token-data meta :indent) indent))
           (do
             (vswap! *index dec) ;; read token again later
-            (wrap-coll (add-delim data end-delim)))
+            (-> data
+                (remove-token token-data)
+                (insert-delim end-delim)
+                wrap-coll))
           (= token end-delim)
           (if (= :indent parinfer)
-            (-> data
-                (into (read-next-useful-tokens-with-indent flat-tokens opts indent))
-                (conj token-data)
-                wrap-coll)
+            (let [tokens-to-move (read-next-useful-tokens-with-indent flat-tokens opts indent)]
+              (if (seq tokens-to-move)
+                (-> data
+                    (remove-token token-data)
+                    (into tokens-to-move)
+                    (insert-token token-data)
+                    wrap-coll)
+                (-> data
+                    (conj token-data)
+                    wrap-coll)))
             (wrap-coll (conj data token-data)))
           (close-delims token)
           (if (= :indent parinfer)
-            (wrap-coll (add-delim data end-delim))
+            (-> data
+                (remove-token token-data)
+                (insert-delim end-delim)
+                wrap-coll)
             (vary-meta (wrap-coll (conj data token-data))
               assoc :error-message "Unmatched delimiter"))
           :else
           (recur (conj data token-data)))
         (if (= :indent parinfer)
-          (wrap-coll (add-delim data end-delim))
+          (-> data
+              (insert-delim end-delim)
+              wrap-coll)
           (vary-meta (wrap-coll data)
             assoc :error-message "EOF while reading"))))))
 
@@ -161,7 +182,7 @@
     (cond
       (close-delims token)
       (if (= :indent parinfer)
-        (read-useful-token flat-tokens opts)
+        (vary-meta token-data assoc :action :remove)
         (vary-meta token-data assoc :error-message "Unmatched delimiter"))
       :else
       token-data)))
@@ -189,11 +210,35 @@
 (defn- node->str [node]
   (if (vector? node)
     (let [[type & children] node]
-      (str/join (map node->str children)))
+      (when-not (-> node meta :action (= :remove))
+        (str/join (map node->str children))))
     node))
 
 (defn flatten [parsed-code]
   (->> parsed-code
        (mapv node->str)
        str/join))
+
+(defn- diff-node [*line *column *diff node-meta node]
+  (if (vector? node)
+    (let [[type & children] node]
+      (if (= type :newline-and-indent)
+        (do
+          (vswap! *line inc)
+          (vreset! *column (-> children first count dec)))
+        (run! (partial diff-node *line *column *diff (meta node)) children)))
+    (let [line @*line
+          column @*column]
+      (vswap! *column + (count node))
+      (when-let [action (:action node-meta)]
+        (vswap! *diff conj {:line line :column column :content node :action action})
+        (when (= action :remove)
+          (vswap! *column - (count node)))))))
+
+(defn diff [parsed-code]
+  (let [*line (volatile! 0)
+        *column (volatile! 0)
+        *diff (volatile! [])]
+    (run! (partial diff-node *line *column *diff nil) parsed-code)
+    @*diff))
 
