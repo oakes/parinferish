@@ -3,36 +3,24 @@
   (:refer-clojure :exclude [find flatten])
   #?(:clj (:import [java.util.regex Pattern Matcher])))
 
-(def ^:private group-names
-  [:newline-and-indent
-   :whitespace
-   :special-char
-   :delimiter
-   :string
-   :character
-   :backslash
-   :comment
-   :number
-   :symbol])
+(def ^:private groups
+  [[:newline-and-indent "(\n[ ]*)"]
+   [:whitespace         "([\\s,]+)"]
+   [:special-char       "(~@|['`~^@])"]
+   [:delimiter          "([\\[\\]{}()]|#\\{)"]
+   [:string             "(\"(?:\\\\.|[^\\\\\"])*\"?)"]
+   [:character          "(\\\\\\S)"]
+   [:backslash          "(\\\\)"]
+   [:comment            "(;.*)"]
+   [:number             "(\\d+\\.?[a-zA-Z\\d]*)"]
+   [:symbol             "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]])
 
 (def ^:private non-code-groups
   #{:newline-and-indent :whitespace :comment})
 
-(def ^:private groups
-  ["(\n[ ]*)"                        ;; newline-and-indent
-   "([\\s,]+)"                       ;; whitespace
-   "(~@|['`~^@])"                    ;; special-char
-   "([\\[\\]{}()]|#\\{)"             ;; delimiter
-   "(\"(?:\\\\.|[^\\\\\"])*\"?)"     ;; string
-   "(\\\\\\S)"                       ;; character
-   "(\\\\)"                          ;; backslash
-   "(;.*)"                           ;; comment
-   "(\\d+\\.?[a-zA-Z\\d]*)"          ;; number
-   "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]) ;; symbol
+(def ^:private group-range (range 0 (count groups)))
 
-(def ^:private group-range (range 0 (count group-names)))
-
-(def ^:private regex-str (str/join "|" groups))
+(def ^:private regex-str (->> groups (map second) (str/join "|")))
 (def ^:private regex (re-pattern regex-str))
 
 (def ^:private open-delims #{"#{" "(" "[" "{"})
@@ -65,8 +53,8 @@
 
 (defn- read-token [matcher *error?]
   (let [token (group matcher 0)
-        group (get group-names
-                (some #(when (group matcher (inc %)) %) group-range)
+        group (get-in groups
+                [(some #(when (group matcher (inc %)) %) group-range) 0]
                 :whitespace)
         token-data [(if (and (= group :symbol)
                              (str/starts-with? token ":"))
