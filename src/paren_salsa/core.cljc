@@ -209,11 +209,14 @@
 
 (defn- node-iter [node-fn nodes node]
   (if (= (first node) :collection)
-    (reduce
-      (fn [v child]
-        (node-iter node-fn v child))
-      nodes
-      (rest node))
+    (->> (reduce
+           (fn [v child]
+             (node-iter node-fn v child))
+           []
+           (rest node))
+         (into [:collection])
+         node-fn
+         (conj nodes))
     (if-not (-> node meta :action (= :remove))
       (conj nodes (node-fn node))
       nodes)))
@@ -221,7 +224,7 @@
 (defn flatten
   ([parsed-code]
    (->> parsed-code
-        (flatten second)
+        (flatten #(-> % rest str/join))
         str/join))
   ([node-fn parsed-code]
    (reduce
