@@ -74,21 +74,12 @@
   (let [first-meta (-> data first meta)
         last-meta (-> data last meta)]
     (vary-meta (into [:collection] data)
-      assoc
-      :start-line (:start-line first-meta)
-      :start-column (:start-column first-meta)
-      :end-line (:end-line last-meta)
-      :end-column (:end-column last-meta)
-      :indent (:indent first-meta))))
+      assoc :indent (:indent first-meta))))
 
-(defn- add-delim [data end-delim {:keys [*line *column]}]
-  (let [line @*line
-        column @*column
-        token-data (vary-meta [:delimiter end-delim] assoc
-                     :start-line line
-                     :start-column column
-                     :end-line line
-                     :end-column (+ column (count end-delim)))
+(defn- add-delim [data end-delim]
+  (let [first-meta (-> data first meta)
+        token-data (vary-meta [:delimiter end-delim]
+                     assoc :indent (:indent first-meta))
         [last-data first-data]
         (->> data
              reverse
@@ -128,7 +119,7 @@
                (< (-> token-data meta :indent) indent))
           (do
             (vswap! *index dec) ;; read token again later
-            (wrap-coll (add-delim data end-delim opts)))
+            (wrap-coll (add-delim data end-delim)))
           (= token end-delim)
           (if (= :indent parinfer)
             (-> data
@@ -138,24 +129,19 @@
             (wrap-coll (conj data token-data)))
           (close-delims token)
           (if (= :indent parinfer)
-            (wrap-coll (add-delim data end-delim opts))
+            (wrap-coll (add-delim data end-delim))
             (vary-meta (wrap-coll (conj data token-data))
               assoc :error-message "Unmatched delimiter"))
           :else
           (recur (conj data token-data)))
         (if (= :indent parinfer)
-          (wrap-coll (add-delim data end-delim opts))
+          (wrap-coll (add-delim data end-delim))
           (vary-meta (wrap-coll data)
             assoc :error-message "EOF while reading"))))))
 
-(defn- read-structured-token [flat-tokens {:keys [*line *column *indent *index] :as opts}]
+(defn- read-structured-token [flat-tokens {:keys [*column *indent *index] :as opts}]
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
-    (let [start-line @*line
-          start-column @*column
-          end-line (if (= group :newline-and-indent)
-                     (vswap! *line inc)
-                     @*line)
-          end-column (if (= group :newline-and-indent)
+    (let [end-column (if (= group :newline-and-indent)
                        (vreset! *column (dec (count token)))
                        (vswap! *column + (count token)))
           indent (cond
@@ -165,12 +151,7 @@
                    (vreset! *indent (dec (count token)))
                    :else
                    @*indent)
-          token-data (vary-meta token-data assoc
-                       :start-line start-line
-                       :start-column start-column
-                       :end-line end-line
-                       :end-column end-column
-                       :indent indent)]
+          token-data (vary-meta token-data assoc :indent indent)]
       (if (open-delims token)
         (read-coll flat-tokens token-data opts)
         token-data))))
@@ -197,7 +178,6 @@
                     (persistent! tokens)))
          opts (cond-> opts @*error? (dissoc :parinfer))
          opts (assoc opts
-                :*line (volatile! 0)
                 :*column (volatile! 0)
                 :*indent (volatile! 0)
                 :*index (volatile! -1))]
