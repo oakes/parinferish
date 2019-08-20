@@ -15,7 +15,7 @@
    [:number             "(\\d+\\.?[a-zA-Z\\d]*)"]
    [:symbol             "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]])
 
-(def ^:private non-code-groups
+(def ^:private whitespace?
   #{:newline-and-indent :whitespace :comment})
 
 (def ^:private group-range (range 0 (count groups)))
@@ -65,7 +65,7 @@
                (not (str/ends-with? token "\"")))
       (vreset! *error? true))
     (cond-> token-data
-            (non-code-groups group)
+            (whitespace? group)
             (vary-meta assoc :whitespace? true))))
 
 (declare read-structured-token)
@@ -90,7 +90,7 @@
         [last-data first-data]
         (->> data
              reverse
-             (split-with #(-> % first non-code-groups))
+             (split-with #(-> % first whitespace?))
              (mapv reverse)
              (mapv vec))]
     (into (conj first-data token-data)
@@ -110,7 +110,7 @@
 (defn- read-next-useful-tokens-with-indent [flat-tokens {:keys [*index] :as opts} indent]
   (let [tokens (read-next-tokens-with-indent flat-tokens opts indent)]
     (if (and (seq tokens)
-             (->> tokens (map first) (every? non-code-groups)))
+             (->> tokens (map first) (every? whitespace?)))
       (do
         (vswap! *index - (count tokens))
         [])
@@ -207,17 +207,28 @@
          (recur (conj structured-tokens token-data))
          structured-tokens)))))
 
-(defn- node->str [node]
-  (if (vector? node)
-    (let [[type & children] node]
-      (when-not (-> node meta :action (= :remove))
-        (str/join (map node->str children))))
-    node))
+(defn- node-iter [node-fn nodes node]
+  (if (= (first node) :collection)
+    (reduce
+      (fn [v child]
+        (node-iter node-fn v child))
+      nodes
+      (rest node))
+    (if-not (-> node meta :action (= :remove))
+      (conj nodes (node-fn node))
+      nodes)))
 
-(defn flatten [parsed-code]
-  (->> parsed-code
-       (mapv node->str)
-       str/join))
+(defn flatten
+  ([parsed-code]
+   (->> parsed-code
+        (flatten second)
+        str/join))
+  ([node-fn parsed-code]
+   (reduce
+     (fn [v code]
+       (into v (node-iter node-fn [] code)))
+     []
+     parsed-code)))
 
 (defn- diff-node [*line *column *diff node-meta node]
   (if (vector? node)
