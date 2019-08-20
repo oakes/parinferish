@@ -214,7 +214,7 @@
              (node-iter node-fn v child))
            []
            (rest node))
-         (into [:collection])
+         (into (with-meta [:collection] (meta node)))
          node-fn
          (conj nodes))
     (if-not (-> node meta :action (= :remove))
