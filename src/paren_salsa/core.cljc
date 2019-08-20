@@ -99,9 +99,10 @@
 (defn- read-next-tokens-with-indent [flat-tokens {:keys [*index] :as opts} indent]
   (loop [tokens []]
     (if-let [[group _ :as token-data] (read-structured-token flat-tokens opts)]
-      (if (and (not= group :delimiter)
-               (>= (-> token-data meta :indent) indent))
-        (recur (conj tokens token-data))
+      (if (>= (-> token-data meta :indent) indent)
+        (recur (conj tokens (cond-> token-data
+                                    (= group :delimiter)
+                                    (vary-meta assoc :action :remove))))
         (do
           (vswap! *index dec)
           tokens))
