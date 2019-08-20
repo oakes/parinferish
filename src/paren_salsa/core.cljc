@@ -64,7 +64,9 @@
     (when (and (= group :string)
                (not (str/ends-with? token "\"")))
       (vreset! *error? true))
-    token-data))
+    (cond-> token-data
+            (non-code-groups group)
+            (vary-meta assoc :whitespace? true))))
 
 (declare read-structured-token)
 
