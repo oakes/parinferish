@@ -9,6 +9,7 @@
                   :delimiter
                   :string
                   :character
+                  :backslash
                   :comment
                   :number
                   :symbol])
@@ -21,6 +22,7 @@
              "([\\[\\]{}()]|#\\{)"             ;; delimiter
              "(\"(?:\\\\.|[^\\\\\"])*\"?)"     ;; string
              "(\\\\\\S)"                       ;; character
+             "(\\\\)"                          ;; backslash
              "(;.*)"                           ;; comment
              "(\\d+\\.?[a-zA-Z\\d]*)"          ;; number
              "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]) ;; symbol
@@ -94,8 +96,7 @@
                      :start-column column
                      :end-line line
                      :end-column (+ column (count end-delim)))
-        [last-data
-         first-data]
+        [last-data first-data]
         (->> data
              reverse
              (split-with #(-> % first non-code-groups))

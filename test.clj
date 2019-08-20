@@ -14,9 +14,9 @@
         ps-data (ps/parse text opts)
         ps-result (ps/flatten ps-data)]
     (when-not (= (get result "text") ps-result)
-      (println "Test failed:")
-      (println "Input:" (pr-str text))
-      (println "Output:" (pr-str ps-result))
+      (println "Test failed")
+      (println "Input:   " (pr-str text))
+      (println "Output:  " (pr-str ps-result))
       (println "Expected:" (pr-str (get result "text")))
       (println)
       #_(System/exit 0))))
