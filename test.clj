@@ -7,17 +7,14 @@
         test-case (->> file-name
                        io/resource
                        slurp
-                       json/read-str)]
-  (let [{:strs [text result options]} test-case
-        opts {:parinfer :indent
-              :cursor-line (get options "cursorLine")
-              :cursor-column (get options "cursorX")}
+                       json/read-str)
+        :when (empty? (get test-case "options"))]
+  (let [{:strs [text result]} test-case
+        opts {:parinfer :indent}
         ps-data (ps/parse text opts)
         ps-result (ps/flatten ps-data)]
     (when-not (= (get result "text") ps-result)
       (println "Test failed:")
-      (println (pr-str ps-data))
-      (println "Options:" options)
       (println "Input:" (pr-str text))
       (println "Output:" (pr-str ps-result))
       (println "Expected:" (pr-str (get result "text")))
