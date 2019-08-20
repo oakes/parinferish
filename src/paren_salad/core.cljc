@@ -162,23 +162,6 @@
           (vswap! *errors conj :unbalanced-quote)
           (vary-meta token-data assoc
             :error-message "Unbalanced quote"))
-        (= group :comment)
-        (let [consecutive-whitespace (loop [i @*index
-                                            s ""]
-                                       (if-let [[group token] (get flat-tokens i)]
-                                         (if (non-code-groups group)
-                                           (recur (dec i) (str token s))
-                                           s)
-                                         s))]
-          (vswap! *errors
-            (if (->> (str/replace consecutive-whitespace #"\\\"" "")
-                     (re-seq #"\"")
-                     count
-                     odd?)
-              conj
-              disj)
-            :quote-danger)
-          token-data)
         :else
         token-data))))
 
