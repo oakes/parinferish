@@ -1,7 +1,7 @@
 (require
   '[clojure.data.json :as json]
   '[clojure.java.io :as io]
-  '[paren-salad.core :as ps])
+  '[paren-salsa.core :as ps])
 
 (doseq [file-name ["indent-mode.json"]
         test-case (->> file-name
