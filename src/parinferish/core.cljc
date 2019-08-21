@@ -1,4 +1,4 @@
-(ns paren-salsa.core
+(ns parinferish.core
   (:require [clojure.string :as str])
   (:refer-clojure :exclude [find flatten])
   #?(:clj (:import [java.util.regex Pattern Matcher])))

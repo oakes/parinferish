@@ -1,16 +1,16 @@
 (require
   '[clojure.data.json :as json]
   '[clojure.java.io :as io]
-  '[paren-salsa.core :as ps])
+  '[parinferish.core :as ps])
 
-(doseq [file-name ["indent-mode.json"]
+(doseq [file-name ["paren-mode.json"]
         test-case (->> file-name
                        io/resource
                        slurp
                        json/read-str)
         :when (empty? (get test-case "options"))]
   (let [{:strs [text result]} test-case
-        opts {:parinfer :indent}
+        opts {:parinfer :paren}
         ps-data (ps/parse text opts)
         ps-result (ps/flatten ps-data)]
     (when-not (= (get result "text") ps-result)

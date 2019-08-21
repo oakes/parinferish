@@ -1,6 +1,6 @@
 ## Introduction
 
-A Clojure and ClojureScript library that parses code and optionally applies Parinfer to it.
+A Clojure and ClojureScript library that parses code and optionally applies parinfer(ish) to it.
 
 ## Licensing
 
