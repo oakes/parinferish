@@ -51,7 +51,7 @@
         #?(:clj  (.start ^Matcher *matcher)
            :cljs (.-index @*matcher))))))
 
-(defn- read-token [matcher *error?]
+(defn- read-token [matcher *error? *column *indent]
   (let [token (group matcher 0)
         group (get-in groups
                 [(some #(when (group matcher (inc %)) %) group-range) 0]
@@ -60,7 +60,18 @@
                              (str/starts-with? token ":"))
                       :keyword
                       group)
-                    token]]
+                    token]
+        end-column (if (= group :newline-and-indent)
+                     (vreset! *column (dec (count token)))
+                     (vswap! *column + (count token)))
+        indent (cond
+                 (open-delims token)
+                 (vreset! *indent (+ @*indent (count token)))
+                 (= group :newline-and-indent)
+                 (vreset! *indent (dec (count token)))
+                 :else
+                 @*indent)
+        token-data (vary-meta token-data assoc :indent indent)]
     (when (and (= group :string)
                (not (str/ends-with? token "\"")))
       (vreset! *error? true))
@@ -238,26 +249,15 @@
         (vary-meta (wrap-coll data)
           assoc :error-message "EOF while reading")))))
 
-(defn- read-structured-token [flat-tokens {:keys [*column *indent *index mode] :as opts}]
+(defn- read-structured-token [flat-tokens {:keys [*index mode] :as opts}]
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
-    (let [end-column (if (= group :newline-and-indent)
-                       (vreset! *column (dec (count token)))
-                       (vswap! *column + (count token)))
-          indent (cond
-                   (open-delims token)
-                   (vreset! *indent end-column)
-                   (= group :newline-and-indent)
-                   (vreset! *indent (dec (count token)))
-                   :else
-                   @*indent)
-          token-data (vary-meta token-data assoc :indent indent)]
-      (if (and (= :delimiter group)
-               (open-delims token))
-        (case mode
-          :indent (read-coll-indent-mode flat-tokens token-data opts)
-          :paren (read-coll-paren-mode flat-tokens token-data opts)
-          nil (read-coll flat-tokens token-data opts))
-        token-data))))
+    (if (and (= :delimiter group)
+             (open-delims token))
+      (case mode
+        :indent (read-coll-indent-mode flat-tokens token-data opts)
+        :paren (read-coll-paren-mode flat-tokens token-data opts)
+        nil (read-coll flat-tokens token-data opts))
+      token-data)))
 
 (defn- read-useful-token [flat-tokens {:keys [mode] :as opts}]
   (when-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
@@ -275,15 +275,16 @@
   ([s opts]
    (let [matcher (->regex s)
          *error? (volatile! false)
+         *column (volatile! 0)
+         *indent (volatile! 0)
          tokens (loop [tokens (transient [])]
                   (if (find matcher)
-                    (recur (conj! tokens (read-token matcher *error?)))
+                    (recur (conj! tokens (read-token matcher *error? *column *indent)))
                     (persistent! tokens)))
-         opts (cond-> opts @*error? (dissoc :mode))
-         opts (assoc opts
-                :*column (volatile! 0)
-                :*indent (volatile! 0)
-                :*index (volatile! -1))]
+         opts (cond-> (assoc opts
+                        :*index (volatile! -1))
+                      @*error?
+                      (dissoc :mode))]
      (loop [structured-tokens []]
        (if-let [token-data (read-useful-token tokens opts)]
          (recur (conj structured-tokens token-data))
