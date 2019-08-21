@@ -71,8 +71,7 @@
 (declare read-structured-token)
 
 (defn- wrap-coll [data]
-  (let [first-meta (-> data first meta)
-        last-meta (-> data last meta)]
+  (let [first-meta (-> data first meta)]
     (vary-meta (into [:collection] data)
       assoc :indent (:indent first-meta))))
 
