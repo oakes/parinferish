@@ -149,7 +149,8 @@
 
 (defn- read-coll-indent-mode [flat-tokens [_ delim :as token-data] {:keys [*index] :as opts}]
   (let [end-delim (delims delim)
-        indent (-> token-data meta :indent)]
+        indent (-> token-data meta :indent)
+        opts (assoc opts :min-indent indent)]
     (loop [data [token-data]
            whitespace-data []
            last-index @*index]
@@ -249,15 +250,17 @@
         (vary-meta (wrap-coll data)
           assoc :error-message "EOF while reading")))))
 
-(defn- read-structured-token [flat-tokens {:keys [*index mode] :as opts}]
+(defn- read-structured-token [flat-tokens {:keys [*index mode min-indent] :as opts}]
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
-    (if (and (= :delimiter group)
-             (open-delims token))
-      (case mode
-        :indent (read-coll-indent-mode flat-tokens token-data opts)
-        :paren (read-coll-paren-mode flat-tokens token-data opts)
-        nil (read-coll flat-tokens token-data opts))
-      token-data)))
+    (when (or (nil? min-indent)
+              (-> token-data meta :indent (>= min-indent)))
+      (if (and (= :delimiter group)
+               (open-delims token))
+        (case mode
+          :indent (read-coll-indent-mode flat-tokens token-data opts)
+          :paren (read-coll-paren-mode flat-tokens token-data opts)
+          nil (read-coll flat-tokens token-data opts))
+        token-data))))
 
 (defn- read-useful-token [flat-tokens {:keys [mode] :as opts}]
   (when-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
