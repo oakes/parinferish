@@ -193,19 +193,23 @@
       (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
         (cond
           (= :newline-and-indent group)
-          (let [new-indent (-> token-data meta :indent)]
+          (let [current-indent (-> token-data meta :indent)]
             (recur
-              (conj data
-                (cond
-                  (< new-indent indent)
-                  (let [new-spaces (repeat (- indent new-indent) " ")]
-                    (vary-meta [group (str token (str/join new-spaces))]
-                      assoc :indent indent))
-                  (and max-indent (> new-indent max-indent))
-                  (vary-meta [group (subs token 0 (inc max-indent))]
-                    assoc :indent max-indent)
-                  :else
-                  token-data))
+              (cond
+                (< current-indent indent)
+                (-> data
+                    (conj (vary-meta token-data
+                            assoc :action :remove))
+                    (conj (vary-meta [group (str token (str/join (repeat (- indent current-indent) " ")))]
+                            assoc :indent indent :action :insert)))
+                (and max-indent (> current-indent max-indent))
+                (-> data
+                    (conj (vary-meta token-data
+                            assoc :action :remove))
+                    (conj (vary-meta [group (subs token 0 (inc max-indent))]
+                            assoc :indent max-indent :action :insert)))
+                :else
+                (conj data token-data))
               max-indent))
           (= :collection group)
           (recur
