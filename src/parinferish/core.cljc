@@ -65,8 +65,9 @@
                      (vreset! *column (dec (count token)))
                      (vswap! *column + (count token)))
         indent (cond
-                 (open-delims token)
-                 (vreset! *indent (+ @*indent (count token)))
+                 (and (= :delimiter group)
+                      (open-delims token))
+                 (vreset! *indent end-column)
                  (= group :newline-and-indent)
                  (vreset! *indent (dec (count token)))
                  :else
