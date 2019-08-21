@@ -95,61 +95,47 @@
     (into (conj first-data token-data)
           last-data)))
 
-(defn- read-next-tokens-with-indent [flat-tokens {:keys [*index] :as opts} indent]
-  (loop [tokens []]
-    (if-let [[group _ :as token-data] (read-structured-token flat-tokens opts)]
-      (if (>= (-> token-data meta :indent) indent)
-        (recur (conj tokens (cond-> token-data
-                                    (= group :delimiter)
-                                    (vary-meta assoc :action :remove))))
-        (do
-          (vswap! *index dec)
-          tokens))
-      tokens)))
-
-(defn- read-next-useful-tokens-with-indent [flat-tokens {:keys [*index] :as opts} indent]
-  (let [tokens (read-next-tokens-with-indent flat-tokens opts indent)]
-    (if (and (seq tokens)
-             (->> tokens (map first) (every? whitespace?)))
-      (do
-        (vswap! *index - (count tokens))
-        [])
-      tokens)))
-
 (defn- read-coll-indent-mode [flat-tokens [_ delim :as token-data] {:keys [*index] :as opts}]
   (let [end-delim (delims delim)
         indent (-> token-data meta :indent)]
-    (loop [data [token-data]]
-      (if-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
+    (loop [data [token-data]
+           whitespace-data []
+           last-non-whitespace-index @*index]
+      (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
         (cond
+          (whitespace? group)
+          (recur data (conj whitespace-data token-data) last-non-whitespace-index)
           (< (-> token-data meta :indent) indent)
           (do
-            (vswap! *index dec) ;; read token again later
+            (vreset! *index last-non-whitespace-index)
             (-> data
                 (remove-token token-data)
                 (insert-delim end-delim)
                 wrap-coll))
           (= token end-delim)
-          (let [tokens-to-move (read-next-useful-tokens-with-indent flat-tokens opts indent)]
-            (if (seq tokens-to-move)
-              (-> data
-                  (remove-token token-data)
-                  (into tokens-to-move)
-                  (insert-token token-data)
-                  wrap-coll)
-              (-> data
-                  (conj token-data)
-                  wrap-coll)))
-          (close-delims token)
           (-> data
-              (remove-token token-data)
-              (insert-delim end-delim)
+              (into whitespace-data)
+              (conj token-data)
               wrap-coll)
+          (close-delims token)
+          (do
+            (vreset! *index last-non-whitespace-index)
+            (-> data
+                (remove-token token-data)
+                (insert-delim end-delim)
+                wrap-coll))
           :else
-          (recur (conj data token-data)))
-        (-> data
-            (insert-delim end-delim)
-            wrap-coll)))))
+          (recur
+            (-> data
+                (into whitespace-data)
+                (conj token-data))
+            []
+            @*index))
+        (do
+          (vreset! *index last-non-whitespace-index)
+          (-> data
+              (insert-delim end-delim)
+              wrap-coll))))))
 
 (defn- read-coll [flat-tokens [_ delim :as token-data] {:keys [*index] :as opts}]
   (let [end-delim (delims delim)]
