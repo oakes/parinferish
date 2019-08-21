@@ -213,7 +213,8 @@
                    :else
                    @*indent)
           token-data (vary-meta token-data assoc :indent indent)]
-      (if (open-delims token)
+      (if (and (= :delimiter group)
+               (open-delims token))
         (if (= :indent parinfer)
           (read-coll-indent-mode flat-tokens token-data opts)
           (read-coll flat-tokens token-data opts))
