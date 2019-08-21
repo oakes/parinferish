@@ -5,7 +5,7 @@
 
 (def ^:private groups
   [[:newline-and-indent "(\n[ ]*)"]
-   [:whitespace         "([\\s,]+)"]
+   [:whitespace         "([ \\t\\r,]+)"]
    [:special-char       "(~@|['`~^@])"]
    [:delimiter          "([\\[\\]{}()]|#\\{)"]
    [:string             "(\"(?:\\\\.|[^\\\\\"])*\"?)"]
@@ -185,17 +185,38 @@
               (insert-delim end-delim)
               wrap-coll))))))
 
+(defn- read-coll-paren-mode [flat-tokens [_ delim :as token-data] opts]
+  (let [end-delim (delims delim)
+        indent (-> token-data meta :indent)]
+    (loop [data [token-data]]
+      (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
+        (cond
+          (= :newline-and-indent group)
+          (let [new-indent (-> token-data meta :indent)]
+            (recur
+              (conj data
+                (if (< new-indent indent)
+                  (let [new-spaces (repeat (- indent new-indent) " ")]
+                    (vary-meta [group (str token (str/join new-spaces))]
+                      assoc :indent indent))
+                  token-data))))
+          (= :delimiter group)
+          (cond-> (wrap-coll (conj data token-data))
+                  (not= token end-delim)
+                  (vary-meta assoc :error-message "Unmatched delimiter"))
+          :else
+          (recur (conj data token-data)))
+        (vary-meta (wrap-coll data)
+          assoc :error-message "EOF while reading")))))
+
 (defn- read-coll [flat-tokens [_ delim :as token-data] {:keys [*index] :as opts}]
   (let [end-delim (delims delim)]
     (loop [data [token-data]]
-      (if-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
-        (cond
-          (= token end-delim)
-          (wrap-coll (conj data token-data))
-          (close-delims token)
-          (vary-meta (wrap-coll (conj data token-data))
-            assoc :error-message "Unmatched delimiter")
-          :else
+      (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
+        (if (= :delimiter group)
+          (cond-> (wrap-coll (conj data token-data))
+                  (not= token end-delim)
+                  (vary-meta assoc :error-message "Unmatched delimiter"))
           (recur (conj data token-data)))
         (vary-meta (wrap-coll data)
           assoc :error-message "EOF while reading")))))
@@ -215,8 +236,9 @@
           token-data (vary-meta token-data assoc :indent indent)]
       (if (and (= :delimiter group)
                (open-delims token))
-        (if (= :indent parinfer)
-          (read-coll-indent-mode flat-tokens token-data opts)
+        (case parinfer
+          :indent (read-coll-indent-mode flat-tokens token-data opts)
+          :paren (read-coll-paren-mode flat-tokens token-data opts)
           (read-coll flat-tokens token-data opts))
         token-data))))
 
