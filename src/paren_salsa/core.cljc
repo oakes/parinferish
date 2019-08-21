@@ -153,25 +153,25 @@
                 (remove-token token-data)
                 (insert-delim end-delim)
                 wrap-coll))
-          (= token end-delim)
-          (let [tokens-to-move (read-next-tokens-with-indent flat-tokens opts indent)]
-            (if (seq tokens-to-move)
-              (-> data
-                  (into whitespace-data)
-                  (remove-token token-data)
-                  (into tokens-to-move)
-                  (insert-token token-data)
-                  wrap-coll)
-              (-> data
-                  (into whitespace-data)
-                  (conj token-data)
-                  wrap-coll)))
-          (close-delims token)
-          (-> data
-              (into whitespace-data)
-              (remove-token token-data)
-              (insert-delim end-delim)
-              wrap-coll)
+          (= :delimiter group)
+          (if (= token end-delim)
+            (let [tokens-to-move (read-next-tokens-with-indent flat-tokens opts indent)]
+              (if (seq tokens-to-move)
+                (-> data
+                    (into whitespace-data)
+                    (remove-token token-data)
+                    (into tokens-to-move)
+                    (insert-token token-data)
+                    wrap-coll)
+                (-> data
+                    (into whitespace-data)
+                    (conj token-data)
+                    wrap-coll)))
+            (-> data
+                (into whitespace-data)
+                (remove-token token-data)
+                (insert-delim end-delim)
+                wrap-coll))
           :else
           (recur
             (-> data
