@@ -188,24 +188,37 @@
 (defn- read-coll-paren-mode [flat-tokens [_ delim :as token-data] opts]
   (let [end-delim (delims delim)
         indent (-> token-data meta :indent)]
-    (loop [data [token-data]]
+    (loop [data [token-data]
+           max-indent nil]
       (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
         (cond
           (= :newline-and-indent group)
           (let [new-indent (-> token-data meta :indent)]
             (recur
               (conj data
-                (if (< new-indent indent)
+                (cond
+                  (< new-indent indent)
                   (let [new-spaces (repeat (- indent new-indent) " ")]
                     (vary-meta [group (str token (str/join new-spaces))]
                       assoc :indent indent))
-                  token-data))))
+                  (and max-indent (> new-indent max-indent))
+                  (vary-meta [group (subs token 0 (inc max-indent))]
+                    assoc :indent max-indent)
+                  :else
+                  token-data))
+              max-indent))
+          (= :collection group)
+          (recur
+            (conj data token-data)
+            (cond-> (-> token-data meta :indent dec)
+                    max-indent
+                    (min max-indent)))
           (= :delimiter group)
           (cond-> (wrap-coll (conj data token-data))
                   (not= token end-delim)
                   (vary-meta assoc :error-message "Unmatched delimiter"))
           :else
-          (recur (conj data token-data)))
+          (recur (conj data token-data) max-indent))
         (vary-meta (wrap-coll data)
           assoc :error-message "EOF while reading")))))
 
