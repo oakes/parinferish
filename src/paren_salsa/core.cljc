@@ -238,7 +238,7 @@
         (vary-meta (wrap-coll data)
           assoc :error-message "EOF while reading")))))
 
-(defn- read-structured-token [flat-tokens {:keys [*column *indent *index parinfer] :as opts}]
+(defn- read-structured-token [flat-tokens {:keys [*column *indent *index mode] :as opts}]
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
     (let [end-column (if (= group :newline-and-indent)
                        (vreset! *column (dec (count token)))
@@ -253,17 +253,17 @@
           token-data (vary-meta token-data assoc :indent indent)]
       (if (and (= :delimiter group)
                (open-delims token))
-        (case parinfer
+        (case mode
           :indent (read-coll-indent-mode flat-tokens token-data opts)
           :paren (read-coll-paren-mode flat-tokens token-data opts)
-          (read-coll flat-tokens token-data opts))
+          nil (read-coll flat-tokens token-data opts))
         token-data))))
 
-(defn- read-useful-token [flat-tokens {:keys [parinfer] :as opts}]
+(defn- read-useful-token [flat-tokens {:keys [mode] :as opts}]
   (when-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
     (cond
       (close-delims token)
-      (if (= :indent parinfer)
+      (if (= :indent mode)
         (vary-meta token-data assoc :action :remove)
         (vary-meta token-data assoc :error-message "Unmatched delimiter"))
       :else
@@ -279,7 +279,7 @@
                   (if (find matcher)
                     (recur (conj! tokens (read-token matcher *error?)))
                     (persistent! tokens)))
-         opts (cond-> opts @*error? (dissoc :parinfer))
+         opts (cond-> opts @*error? (dissoc :mode))
          opts (assoc opts
                 :*column (volatile! 0)
                 :*indent (volatile! 0)
