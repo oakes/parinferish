@@ -207,7 +207,8 @@
   (let [end-delim (delims delim)
         min-indent (cond-> (-> token-data meta :indent)
                            indent-change
-                           (+ indent-change))]
+                           (+ indent-change))
+        opts (dissoc opts :min-indent)]
     (loop [data [token-data]
            max-indent nil
            total-indent-change 0]
