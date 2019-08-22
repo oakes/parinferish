@@ -292,7 +292,7 @@
   (when-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
     (cond
       (close-delims token)
-      (if (= :indent mode)
+      (if (#{:indent :smart} mode)
         (vary-meta token-data assoc :action :remove)
         (vary-meta token-data assoc :error-message (vreset! *error "Unmatched delimiter")))
       :else
