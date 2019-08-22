@@ -360,11 +360,10 @@
 (defn- diff-node [*line *column *diff node-meta node]
   (if (vector? node)
     (let [[type & children] node]
-      (if (= type :newline-and-indent)
-        (do
-          (vswap! *line inc)
-          (vreset! *column (-> children first count dec)))
-        (run! (partial diff-node *line *column *diff (meta node)) children)))
+      (when (= type :newline-and-indent)
+        (vswap! *line inc)
+        (vreset! *column (-> children first count dec)))
+      (run! (partial diff-node *line *column *diff (meta node)) children))
     (let [line @*line
           column @*column]
       (vswap! *column + (count node))
@@ -376,7 +375,11 @@
 (defn diff [parsed-code]
   (let [*line (volatile! 0)
         *column (volatile! 0)
-        *diff (volatile! [])]
-    (run! (partial diff-node *line *column *diff nil) parsed-code)
+        *diff (volatile! [])
+        m (meta parsed-code)
+        disable-parinfer? (and (= :paren (:mode m))
+                               (:error? m))]
+    (when-not disable-parinfer?
+      (run! (partial diff-node *line *column *diff nil) parsed-code))
     @*diff))
 
