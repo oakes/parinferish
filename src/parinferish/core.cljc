@@ -214,26 +214,25 @@
                                 (and max-indent (> current-indent max-indent))
                                 (- max-indent current-indent)
                                 :else
-                                0)
-                total-indent-change (+ total-indent-change indent-change)]
+                                0)]
             (recur
               (cond
-                (pos? total-indent-change)
+                (pos? indent-change)
                 (-> data
                     (conj (vary-meta token-data
                             assoc :action :remove))
-                    (conj (vary-meta [group (str token (str/join (repeat total-indent-change " ")))]
+                    (conj (vary-meta [group (str token (str/join (repeat indent-change " ")))]
                             assoc :indent min-indent :action :insert)))
-                (neg? total-indent-change)
+                (neg? indent-change)
                 (-> data
                     (conj (vary-meta token-data
                             assoc :action :remove))
-                    (conj (vary-meta [group (subs token 0 (+ (count token) total-indent-change))]
+                    (conj (vary-meta [group (subs token 0 (+ (count token) indent-change))]
                             assoc :indent max-indent :action :insert)))
                 :else
                 (conj data token-data))
               max-indent
-              total-indent-change))
+              indent-change))
           (= :collection group)
           (recur
             (conj data token-data)
