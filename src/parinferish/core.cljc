@@ -188,7 +188,6 @@
             (do
               (vreset! *index last-index)
               (-> data
-                  (into whitespace-data)
                   (insert-delim end-delim)
                   wrap-coll)))
           :else
