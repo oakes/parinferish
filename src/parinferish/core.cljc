@@ -199,7 +199,7 @@
               (insert-delim end-delim)
               wrap-coll))))))
 
-(defn- read-coll-paren-mode [flat-tokens [_ delim :as token-data] {:keys [indent-change] :as opts}]
+(defn- read-coll-paren-mode [flat-tokens [_ delim :as token-data] {:keys [indent-change *error] :as opts}]
   (let [end-delim (delims delim)
         min-indent (cond-> (-> token-data meta :indent)
                            indent-change
@@ -248,23 +248,23 @@
           (= :delimiter group)
           (cond-> (wrap-coll (conj data token-data))
                   (not= token end-delim)
-                  (vary-meta assoc :error-message "Unmatched delimiter"))
+                  (vary-meta assoc :error-message (vreset! *error "Unmatched delimiter")))
           :else
           (recur (conj data token-data) max-indent total-indent-change))
         (vary-meta (wrap-coll data)
-          assoc :error-message "EOF while reading")))))
+          assoc :error-message (vreset! *error "EOF while reading"))))))
 
-(defn- read-coll [flat-tokens [_ delim :as token-data] {:keys [*index] :as opts}]
+(defn- read-coll [flat-tokens [_ delim :as token-data] {:keys [*index *error] :as opts}]
   (let [end-delim (delims delim)]
     (loop [data [token-data]]
       (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
         (if (= :delimiter group)
           (cond-> (wrap-coll (conj data token-data))
                   (not= token end-delim)
-                  (vary-meta assoc :error-message "Unmatched delimiter"))
+                  (vary-meta assoc :error-message (vreset! *error "Unmatched delimiter")))
           (recur (conj data token-data)))
         (vary-meta (wrap-coll data)
-          assoc :error-message "EOF while reading")))))
+          assoc :error-message (vreset! *error "EOF while reading"))))))
 
 (defn- read-structured-token [flat-tokens {:keys [*index mode min-indent] :as opts}]
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
@@ -278,13 +278,13 @@
           nil (read-coll flat-tokens token-data opts))
         token-data))))
 
-(defn- read-useful-token [flat-tokens {:keys [mode] :as opts}]
+(defn- read-useful-token [flat-tokens {:keys [mode *error] :as opts}]
   (when-let [[_ token :as token-data] (read-structured-token flat-tokens opts)]
     (cond
       (close-delims token)
       (if (= :indent mode)
         (vary-meta token-data assoc :action :remove)
-        (vary-meta token-data assoc :error-message "Unmatched delimiter"))
+        (vary-meta token-data assoc :error-message (vreset! *error "Unmatched delimiter")))
       :else
       token-data)))
 
@@ -300,28 +300,32 @@
                   (if (find matcher)
                     (recur (conj! tokens (read-token matcher *error? *column *indent)))
                     (persistent! tokens)))
-         opts (cond-> (assoc opts
-                        :*index (volatile! -1))
-                      @*error?
-                      (dissoc :mode))]
+         opts (assoc opts
+                :*error (volatile! nil)
+                :*index (volatile! -1))
+         opts (cond-> opts @*error? (dissoc :mode))]
      (loop [structured-tokens []]
        (if-let [token-data (read-useful-token tokens opts)]
          (recur (conj structured-tokens token-data))
-         structured-tokens)))))
+         (let [{:keys [mode *error]} opts]
+           (vary-meta structured-tokens
+             assoc :mode mode :error? (some? @*error))))))))
 
-(defn- node-iter [node-fn nodes node]
+(defn- node-iter [node-fn nodes node disable-parinfer?]
   (if (= (first node) :collection)
     (->> (reduce
            (fn [v child]
-             (node-iter node-fn v child))
+             (node-iter node-fn v child disable-parinfer?))
            []
            (rest node))
          (into (with-meta [:collection] (meta node)))
          node-fn
          (conj nodes))
-    (if-not (-> node meta :action (= :remove))
-      (conj nodes (node-fn node))
-      nodes)))
+    (if (if disable-parinfer?
+          (-> node meta :action (= :insert))
+          (-> node meta :action (= :remove)))
+      nodes
+      (conj nodes (node-fn node)))))
 
 (defn flatten
   ([parsed-code]
@@ -329,11 +333,14 @@
         (flatten #(-> % rest str/join))
         str/join))
   ([node-fn parsed-code]
-   (reduce
-     (fn [v code]
-       (into v (node-iter node-fn [] code)))
-     []
-     parsed-code)))
+   (let [m (meta parsed-code)
+         disable-parinfer? (and (= :paren (:mode m))
+                                (:error? m))]
+     (reduce
+       (fn [v code]
+         (into v (node-iter node-fn [] code disable-parinfer?)))
+       []
+       parsed-code))))
 
 (defn- diff-node [*line *column *diff node-meta node]
   (if (vector? node)
