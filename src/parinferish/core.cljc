@@ -198,44 +198,58 @@
               (insert-delim end-delim)
               wrap-coll))))))
 
-(defn- read-coll-paren-mode [flat-tokens [_ delim :as token-data] opts]
+(defn- read-coll-paren-mode [flat-tokens [_ delim :as token-data] {:keys [indent-change] :as opts}]
   (let [end-delim (delims delim)
-        indent (-> token-data meta :indent)]
+        min-indent (cond-> (-> token-data meta :indent)
+                           indent-change
+                           (+ indent-change))]
     (loop [data [token-data]
-           max-indent nil]
-      (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
+           max-indent nil
+           total-indent-change 0]
+      (if-let [[group token :as token-data] (read-structured-token flat-tokens
+                                              (assoc opts :indent-change total-indent-change))]
         (cond
           (= :newline-and-indent group)
-          (let [current-indent (-> token-data meta :indent)]
+          (let [current-indent (-> token-data meta :indent)
+                indent-change (cond
+                                (< current-indent min-indent)
+                                (- min-indent current-indent)
+                                (and max-indent (> current-indent max-indent))
+                                (- max-indent current-indent)
+                                :else
+                                0)
+                total-indent-change (+ total-indent-change indent-change)]
             (recur
               (cond
-                (< current-indent indent)
+                (pos? total-indent-change)
                 (-> data
                     (conj (vary-meta token-data
                             assoc :action :remove))
-                    (conj (vary-meta [group (str token (str/join (repeat (- indent current-indent) " ")))]
-                            assoc :indent indent :action :insert)))
-                (and max-indent (> current-indent max-indent))
+                    (conj (vary-meta [group (str token (str/join (repeat total-indent-change " ")))]
+                            assoc :indent min-indent :action :insert)))
+                (neg? total-indent-change)
                 (-> data
                     (conj (vary-meta token-data
                             assoc :action :remove))
-                    (conj (vary-meta [group (subs token 0 (inc max-indent))]
+                    (conj (vary-meta [group (subs token 0 (+ (count token) total-indent-change))]
                             assoc :indent max-indent :action :insert)))
                 :else
                 (conj data token-data))
-              max-indent))
+              max-indent
+              total-indent-change))
           (= :collection group)
           (recur
             (conj data token-data)
             (cond-> (-> token-data meta :indent dec)
                     max-indent
-                    (min max-indent)))
+                    (min max-indent))
+            total-indent-change)
           (= :delimiter group)
           (cond-> (wrap-coll (conj data token-data))
                   (not= token end-delim)
                   (vary-meta assoc :error-message "Unmatched delimiter"))
           :else
-          (recur (conj data token-data) max-indent))
+          (recur (conj data token-data) max-indent total-indent-change))
         (vary-meta (wrap-coll data)
           assoc :error-message "EOF while reading")))))
 
