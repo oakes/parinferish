@@ -357,18 +357,22 @@
        []
        parsed-code))))
 
-(defn- diff-node [*line *column *diff node-meta node]
+(defn- diff-node [*line *column *diff parent-node node]
   (if (vector? node)
     (let [[type & children] node]
       (when (= type :newline-and-indent)
         (vswap! *line inc)
         (vreset! *column (-> children first count dec)))
-      (run! (partial diff-node *line *column *diff (meta node)) children))
+      (run! (partial diff-node *line *column *diff node) children))
     (let [line @*line
           column @*column]
       (vswap! *column + (count node))
-      (when-let [action (:action node-meta)]
-        (vswap! *diff conj {:line line :column column :content node :action action})
+      (when-let [action (:action (meta parent-node))]
+        (vswap! *diff conj {:line line
+                            :column column
+                            :content node
+                            :action action
+                            :type (first parent-node)})
         (when (= action :remove)
           (vswap! *column - (count node)))))))
 
