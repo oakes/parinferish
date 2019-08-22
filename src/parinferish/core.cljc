@@ -51,7 +51,7 @@
         #?(:clj  (.start ^Matcher *matcher)
            :cljs (.-index @*matcher))))))
 
-(defn- read-token [matcher *error? *column *indent]
+(defn- read-token [matcher *error? *line *column *indent]
   (let [token (group matcher 0)
         group (get-in groups
                 [(some #(when (group matcher (inc %)) %) group-range) 0]
@@ -61,6 +61,12 @@
                       :keyword
                       group)
                     token]
+        line (if (= group :newline-and-indent)
+               (vswap! *line inc)
+               @*line)
+        start-column (if (= group :newline-and-indent)
+                       -1
+                       @*column)
         end-column (if (= group :newline-and-indent)
                      (vreset! *column (dec (count token)))
                      (vswap! *column + (count token)))
@@ -72,7 +78,10 @@
                  (vreset! *indent (dec (count token)))
                  :else
                  @*indent)
-        token-data (vary-meta token-data assoc :indent indent)]
+        token-data (vary-meta token-data assoc
+                     :line line
+                     :column start-column
+                     :indent indent)]
     (when (and (= group :string)
                (not (str/ends-with? token "\"")))
       (vreset! *error? true))
@@ -270,6 +279,13 @@
         (case mode
           :indent (read-coll-indent-mode flat-tokens token-data opts)
           :paren (read-coll-paren-mode flat-tokens token-data opts)
+          :smart (let [{:keys [cursor-line cursor-column]} opts
+                       {:keys [line column]} (meta token-data)]
+                   (if (or (< line cursor-line)
+                           (and (= line cursor-line)
+                                (< column cursor-column)))
+                     (read-coll-indent-mode flat-tokens token-data opts)
+                     (read-coll-paren-mode flat-tokens token-data opts)))
           nil (read-coll flat-tokens token-data opts))
         token-data))))
 
@@ -287,13 +303,18 @@
   ([s]
    (parse s {}))
   ([s opts]
+   (when (and (= :smart (:mode opts))
+              (or (nil? (:cursor-line opts))
+                  (nil? (:cursor-column opts))))
+     (throw (ex-info "Smart mode requires :cursor-line and :cursor-column" {})))
    (let [matcher (->regex s)
          *error? (volatile! false)
+         *line (volatile! 0)
          *column (volatile! 0)
          *indent (volatile! 0)
          tokens (loop [tokens (transient [])]
                   (if (find matcher)
-                    (recur (conj! tokens (read-token matcher *error? *column *indent)))
+                    (recur (conj! tokens (read-token matcher *error? *line *column *indent)))
                     (persistent! tokens)))
          opts (assoc opts
                 :*error (volatile! nil)
