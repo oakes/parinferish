@@ -107,43 +107,39 @@
     (into (conj first-data token-data)
           last-data)))
 
-(defn read-next-tokens-with-indent [flat-tokens {:keys [*index] :as opts} indent]
+(defn read-next-tokens-with-indent [flat-tokens {:keys [*index] :as opts}]
   (loop [data []
          ignore-data []
          last-index @*index
          new-line? false]
     (if-let [[group _ :as token-data] (read-structured-token flat-tokens opts)]
-      (if (>= (-> token-data meta :indent) indent)
-        (cond
-          (= :delimiter group)
+      (cond
+        (= :delimiter group)
+        (recur
+          data
+          (conj ignore-data (vary-meta token-data assoc :action :remove))
+          last-index
+          new-line?)
+        (whitespace? group)
+        (recur
+          data
+          (conj ignore-data token-data)
+          last-index
+          (or new-line? (= group :newline-and-indent)))
+        :else
+        (if new-line?
           (recur
-            data
-            (conj ignore-data (vary-meta token-data assoc :action :remove))
-            last-index
+            (-> data
+                (into ignore-data)
+                (conj token-data))
+            []
+            @*index
             new-line?)
-          (whitespace? group)
           (recur
             data
             (conj ignore-data token-data)
             last-index
-            (or new-line? (= group :newline-and-indent)))
-          :else
-          (if new-line?
-            (recur
-              (-> data
-                  (into ignore-data)
-                  (conj token-data))
-              []
-              @*index
-              new-line?)
-            (recur
-              data
-              (conj ignore-data token-data)
-              last-index
-              new-line?)))
-        (do
-          (vreset! *index last-index)
-          data))
+            new-line?)))
       (do
         (vreset! *index last-index)
         data))))
@@ -168,7 +164,7 @@
           (recur data (conj whitespace-data token-data) last-index)
           (= :delimiter group)
           (if (= token end-delim)
-            (let [tokens-to-move (read-next-tokens-with-indent flat-tokens opts indent)]
+            (let [tokens-to-move (read-next-tokens-with-indent flat-tokens opts)]
               (if (seq tokens-to-move)
                 (-> data
                     (into whitespace-data)
