@@ -162,6 +162,8 @@
            last-index @*index]
       (if-let [[group token :as token-data] (read-structured-token flat-tokens opts)]
         (cond
+          (whitespace? group)
+          (recur data (conj whitespace-data token-data) last-index)
           (< (-> token-data meta :indent) indent)
           (do
             (vreset! *index last-index)
@@ -169,8 +171,6 @@
                 (remove-token token-data)
                 (insert-delim end-delim)
                 wrap-coll))
-          (whitespace? group)
-          (recur data (conj whitespace-data token-data) last-index)
           (= :delimiter group)
           (if (= token end-delim)
             (let [tokens-to-move (read-next-tokens-with-indent flat-tokens opts)]
@@ -273,6 +273,7 @@
 (defn- read-structured-token [flat-tokens {:keys [*index mode min-indent] :as opts}]
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
     (when (or (nil? min-indent)
+              (whitespace? group)
               (-> token-data meta :indent (>= min-indent)))
       (if (and (= :delimiter group)
                (open-delims token))
