@@ -364,7 +364,7 @@
     (let [[type & children] node]
       (when (= type :newline-and-indent)
         (vswap! *line inc)
-        (vreset! *column (-> children first count dec)))
+        (vreset! *column -1))
       (run! (partial diff-node *line *column *diff node) children))
     (let [line @*line
           column @*column]
