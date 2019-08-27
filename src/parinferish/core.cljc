@@ -230,12 +230,12 @@
                 (-> data
                     (conj token-data)
                     (conj (vary-meta [:whitespace (str/join (repeat indent-change " "))]
-                            assoc :action :insert)))
+                            assoc :action :insert :whitespace? true)))
                 (neg? indent-change)
                 (-> data
                     (conj (update token-data 1 subs 0 (+ (count token) indent-change)))
                     (conj (vary-meta [:whitespace (str/join (repeat (* -1 indent-change) " "))]
-                            assoc :action :remove)))
+                            assoc :action :remove :whitespace? true)))
                 :else
                 (conj data token-data))
               max-indent
