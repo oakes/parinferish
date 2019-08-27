@@ -168,7 +168,6 @@
           (do
             (vreset! *index last-index)
             (-> data
-                (remove-token token-data)
                 (insert-delim end-delim)
                 wrap-coll))
           (= :delimiter group)
