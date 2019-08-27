@@ -184,11 +184,12 @@
                     (into whitespace-data)
                     (conj token-data)
                     wrap-coll)))
-            (do
-              (vreset! *index last-index)
+            (recur
               (-> data
-                  (insert-delim end-delim)
-                  wrap-coll)))
+                  (into whitespace-data)
+                  (remove-token token-data))
+              []
+              @*index))
           :else
           (recur
             (-> data
