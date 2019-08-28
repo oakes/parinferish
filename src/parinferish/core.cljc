@@ -21,7 +21,8 @@
 (def ^:private group-range (range 0 (count groups)))
 
 (def ^:private regex-str (->> groups (map second) (str/join "|")))
-(def ^:private regex (re-pattern regex-str))
+(def ^:private regex #?(:clj (re-pattern regex-str)
+                        :cljs (js/RegExp. regex-str "g")))
 
 (def ^:private open-delims #{"#{" "(" "[" "{"})
 (def ^:private close-delims #{"}" ")" "]"})
@@ -36,9 +37,7 @@
   (index [this]))
 
 (defn ->regex [match-str]
-  (let [regex #?(:clj  regex
-                 :cljs (js/RegExp. regex-str "g"))
-        *matcher #?(:clj (.matcher ^Pattern regex match-str)
+  (let [*matcher #?(:clj (.matcher ^Pattern regex match-str)
                     :cljs (volatile! (make-array 0)))]
     (reify IRegex
       (find [this]
