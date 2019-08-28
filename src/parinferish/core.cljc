@@ -272,7 +272,7 @@
   (when-let [[group token :as token-data] (get flat-tokens (vswap! *index inc))]
     (when (or (nil? min-indent)
               (whitespace? group)
-              (-> token-data meta :indent (>= min-indent)))
+              (-> token-data meta :column (>= min-indent)))
       (if (and (= :delimiter group)
                (open-delims token))
         (case mode
