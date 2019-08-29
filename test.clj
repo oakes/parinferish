@@ -1,26 +1,30 @@
 (require
-  '[clojure.data.json :as json]
+  '[clojure.string :as str]
   '[clojure.java.io :as io]
   '[parinferish.core :as ps])
 
 (doseq [mode [:indent :paren :smart]
-        test-case (->> (str (name mode) "-mode.json")
-                       io/resource
-                       slurp
-                       json/read-str)
-        :let [{:strs [text result options]} test-case
-              cursor-line (get options "cursorLine" 0)
-              cursor-column (get options "cursorX" 0)]]
-  (let [opts {:mode mode
-              :cursor-line cursor-line
-              :cursor-column cursor-column}
-        ps-data (ps/parse text opts)
-        ps-result (ps/flatten ps-data)]
-    (when-not (= (get result "text") ps-result)
+        [in out] (-> (str (name mode) "-mode.md")
+                     io/resource
+                     slurp
+                     (str/split #"```")
+                     (->> (filter #(or (str/starts-with? % "in\n")
+                                       (str/starts-with? % "out\n")))
+                          (partition 2)
+                          (map (fn [[in out :as pair]]
+                                 (when-not (str/starts-with? in "in")
+                                   (throw (ex-info (str "Expected \"in\":" \newline in) {})))
+                                 (when-not (str/starts-with? out "out")
+                                   (throw (ex-info (str "Expected \"out\":" \newline out) {})))
+                                 (mapv #(subs % (inc (str/index-of % "\n")))
+                                       pair)))))]
+  (let [opts {:mode mode}
+        res (ps/flatten (ps/parse in opts))]
+    (when-not (= res out)
       (println "Test failed")
       (println "Options: " opts)
-      (println "Input:   " (pr-str text))
-      (println "Output:  " (pr-str ps-result))
-      (println "Expected:" (pr-str (get result "text")))
+      (println "Input:   " (pr-str in))
+      (println "Output:  " (pr-str res))
+      (println "Expected:" (pr-str out))
       (println)
-      #_(System/exit 0))))
+      (System/exit 0))))
