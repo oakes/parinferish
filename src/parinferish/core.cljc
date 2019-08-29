@@ -323,21 +323,19 @@
          (recur (conj structured-tokens token-data))
          (let [{:keys [mode *error]} opts]
            (vary-meta structured-tokens
-             assoc :mode mode :error? (some? @*error))))))))
+             assoc :mode mode)))))))
 
-(defn- node-iter [node-fn nodes node disable-parinfer?]
+(defn- node-iter [node-fn nodes node]
   (if (= (first node) :collection)
     (->> (reduce
            (fn [v child]
-             (node-iter node-fn v child disable-parinfer?))
+             (node-iter node-fn v child))
            []
            (rest node))
          (into (with-meta [:collection] (meta node)))
          node-fn
          (conj nodes))
-    (if (if disable-parinfer?
-          (-> node meta :action (= :insert))
-          (-> node meta :action (= :remove)))
+    (if (-> node meta :action (= :remove))
       nodes
       (conj nodes (node-fn node)))))
 
@@ -347,14 +345,11 @@
         (flatten #(-> % rest str/join))
         str/join))
   ([node-fn parsed-code]
-   (let [m (meta parsed-code)
-         disable-parinfer? (and (= :paren (:mode m))
-                                (:error? m))]
-     (reduce
-       (fn [v code]
-         (into v (node-iter node-fn [] code disable-parinfer?)))
-       []
-       parsed-code))))
+   (reduce
+     (fn [v code]
+       (into v (node-iter node-fn [] code)))
+     []
+     parsed-code)))
 
 (defn- diff-node [*line *column *diff parent-node node]
   (if (vector? node)
@@ -378,11 +373,7 @@
 (defn diff [parsed-code]
   (let [*line (volatile! 0)
         *column (volatile! 0)
-        *diff (volatile! [])
-        m (meta parsed-code)
-        disable-parinfer? (and (= :paren (:mode m))
-                               (:error? m))]
-    (when-not disable-parinfer?
-      (run! (partial diff-node *line *column *diff nil) parsed-code))
+        *diff (volatile! [])]
+    (run! (partial diff-node *line *column *diff nil) parsed-code)
     @*diff))
 
