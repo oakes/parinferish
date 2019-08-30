@@ -1,3 +1,5 @@
+[![Clojars Project](https://img.shields.io/clojars/v/parinferish.svg)](https://clojars.org/parinferish)
+
 ## Introduction
 
 A Clojure and ClojureScript library that parses code and optionally applies parinfer(ish) to it. It works pretty much like parinfer and implements the three modes (indent, paren, and smart) but I'm not necessarily trying to make it behave the exact same way.
