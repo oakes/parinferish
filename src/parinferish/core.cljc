@@ -16,7 +16,12 @@
    [:symbol             "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]])
 
 (def ^:private whitespace?
-  #{:newline-and-indent :whitespace :comment})
+  #{:newline-and-indent :whitespace :comment
+    ;; a lone backslash is not actually whitespace,
+    ;; but it's here to prevent it from being immediately
+    ;; followed by an end paren, since that would cause it
+    ;; to be escaped and turned into a character
+    :backslash})
 
 (def ^:private group-range (range 0 (count groups)))
 
@@ -50,7 +55,7 @@
         #?(:clj  (.start ^Matcher *matcher)
            :cljs (.-index @*matcher))))))
 
-(defn- read-token [matcher *error *line *column *indent]
+(defn- read-token [matcher *error *line *column *indent last-token]
   (let [token (group matcher 0)
         group (get-in groups
                 [(some #(when (group matcher (inc %)) %) group-range) 0]
@@ -86,7 +91,10 @@
             (vary-meta assoc :whitespace? true)
             (and (= group :string)
                  (not (str/ends-with? token "\"")))
-            (vary-meta assoc :error-message (vreset! *error "Unbalanced quote")))))
+            (vary-meta assoc :error-message (vreset! *error "Unbalanced quote"))
+            (and (= group :newline-and-indent)
+                 (= (first last-token) :backslash))
+            (vary-meta assoc :error-message (vreset! *error "Backslash at end of line")))))
 
 (declare read-structured-token)
 
@@ -310,9 +318,11 @@
          *line (volatile! 0)
          *column (volatile! 0)
          *indent (volatile! 0)
-         tokens (loop [tokens (transient [])]
+         tokens (loop [tokens (transient [])
+                       last-token nil]
                   (if (find matcher)
-                    (recur (conj! tokens (read-token matcher *error *line *column *indent)))
+                    (let [token (read-token matcher *error *line *column *indent last-token)]
+                      (recur (conj! tokens token) token))
                     (persistent! tokens)))
          opts (assoc opts
                 :*error *error
