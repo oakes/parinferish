@@ -50,7 +50,7 @@
         #?(:clj  (.start ^Matcher *matcher)
            :cljs (.-index @*matcher))))))
 
-(defn- read-token [matcher *error? *line *column *indent]
+(defn- read-token [matcher *error *line *column *indent]
   (let [token (group matcher 0)
         group (get-in groups
                 [(some #(when (group matcher (inc %)) %) group-range) 0]
@@ -81,12 +81,12 @@
                      :line line
                      :column start-column
                      :indent indent)]
-    (when (and (= group :string)
-               (not (str/ends-with? token "\"")))
-      (vreset! *error? true))
     (cond-> token-data
             (whitespace? group)
-            (vary-meta assoc :whitespace? true))))
+            (vary-meta assoc :whitespace? true)
+            (and (= group :string)
+                 (not (str/ends-with? token "\"")))
+            (vary-meta assoc :error-message (vreset! *error "Unbalanced quote")))))
 
 (declare read-structured-token)
 
@@ -306,22 +306,22 @@
                   (nil? (:cursor-column opts))))
      (throw (ex-info "Smart mode requires :cursor-line and :cursor-column" {})))
    (let [matcher (->regex s)
-         *error? (volatile! false)
+         *error (volatile! nil)
          *line (volatile! 0)
          *column (volatile! 0)
          *indent (volatile! 0)
          tokens (loop [tokens (transient [])]
                   (if (find matcher)
-                    (recur (conj! tokens (read-token matcher *error? *line *column *indent)))
+                    (recur (conj! tokens (read-token matcher *error *line *column *indent)))
                     (persistent! tokens)))
          opts (assoc opts
-                :*error (volatile! nil)
+                :*error *error
                 :*index (volatile! -1))
-         opts (cond-> opts @*error? (dissoc :mode))]
+         opts (cond-> opts @*error (dissoc :mode))]
      (loop [structured-tokens []]
        (if-let [token-data (read-useful-token tokens opts)]
          (recur (conj structured-tokens token-data))
-         (let [{:keys [mode *error]} opts]
+         (let [{:keys [mode]} opts]
            (vary-meta structured-tokens
              assoc :mode mode)))))))
 
