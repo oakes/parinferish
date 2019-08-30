@@ -119,7 +119,7 @@ unmatched close-parens _inside_ a line are removed:
 ```in
 (foo [a (|b] c)
 ```
-```
+```out-disable
 (foo [a (|b] c)
            ^ error: unmatched-close-paren
 ```
@@ -271,7 +271,7 @@ odd number of quotes (one):
   [:div.td {:style "max-width: 500px;"}])
 ```
 
-```
+```out-disable
 (for [col columns]
   "|
   [:div.td {:style "max-width: 500px;"}])
@@ -372,7 +372,7 @@ Inferred close-parens are inserted after escaped whitespace.
 (def bar \ ; <-- space
 ```
 
-```
+```out-disable
 (def foo \,)
 (def bar \ ); <-- space
 ```
@@ -474,7 +474,7 @@ Once the cursor leaves the line, the space is removed.
 (def b )
 ```
 
-```
+```out-disable
 (def b)
 ```
 
@@ -500,7 +500,7 @@ Once the cursor leaves the line, the space is removed.
 (def b [[c d] ])
 ```
 
-```
+```out-disable
 (def b [[c d]])
 ```
 
@@ -535,7 +535,7 @@ With the cursor at the end of the first line, the indented line below does not a
   ret)
 ```
 
-```
+```out-disable
 (let [a 1])|
   ret
 ```
@@ -555,7 +555,7 @@ the previous state:
   ret
 ```
 
-```
+```out-disable
 (let [a 1]) 2
   ret
 ```
@@ -636,7 +636,7 @@ It is allowed if the leading parens are also in paren trail:
   ); comment
 ```
 
-```
+```out-disable
 (foo)
   ; comment
 ```
@@ -676,7 +676,7 @@ Inserting a `(` inside a nested vector:
 (foo [bar (|...] baz)
 ```
 
-```
+```out-disable
 (foo [bar (|...] baz)
                ^ error: unmatched-close-paren
 ```
@@ -693,7 +693,7 @@ Inserting a `]` inside a nested list:
 (foo [bar (]| baz)])
 ```
 
-```
+```out-disable
 (foo [bar (]| baz)])
            ^ error: unmatched-close-paren
 ```
@@ -711,7 +711,7 @@ vector).
 [... (foo [bar ]| baz]  ...)]
 ```
 
-```
+```out-disable
 [... (foo [bar ]| baz]  ...)]
                      ^ error: unmatched-close-paren
 ```
@@ -728,7 +728,7 @@ Suppose you just backspaced a `[` below:
 (let [{:keys |foo bar]} my-map])
 ```
 
-```
+```out-disable
 (let [{:keys |foo bar]} my-map])
                      ^ error: unmatched-close-paren
 ```
@@ -765,7 +765,7 @@ But all it takes is one different kind of a paren to keep it from working:
 (f [x (a (b c(|) d) y] g)
 ```
 
-```
+```out-disable
 (f [x (a (b c(|) d) y] g)
                      ^ error: unmatched-close-paren
 ```
@@ -784,7 +784,7 @@ For example, inserting a `)` below:
   bar)| baz) qux
 ```
 
-```
+```out-disable
 (foo
   bar)| baz) qux
            ^ error: unmatched-close-paren
@@ -804,7 +804,7 @@ For example, inserting a `)` below:
    bar])
 ```
 
-```
+```out-disable
 (foo
   [bar
    bar)| baz
@@ -829,7 +829,7 @@ Or when dedenting a line makes an inner close-paren unmatched:
 |bar) baz
 ```
 
-```
+```out-disable
 (foo
   [bar]
 |bar) baz
@@ -853,7 +853,7 @@ makes the same inner close-paren unmatched:
   |bar) baz
 ```
 
-```
+```out-disable
 (foo
  [bar]
   |bar) baz
@@ -876,7 +876,7 @@ The same problem demonstrated for another dedenting example:
  bar]) baz
 ```
 
-```
+```out-disable
 (foo
  [bar
  bar]) baz
