@@ -64,10 +64,18 @@ keep relative indentation of child expressions:
           (map inc)))
 ```
 
-```out
+```out-disable
 (let [foo [1 2 3]]
      (-> foo
          (map inc)))
+```
+
+**NOTE: Parinferish behaves differently.** It does not maintain relative indentation:
+
+```out
+(let [foo [1 2 3]]
+     (-> foo
+          (map inc)))
 ```
 
 ## Leading Close-Paren
@@ -82,9 +90,17 @@ spaces before the close-paren are not removed.
   foo)
 ```
 
-```out
+```out-disable
 (let [foo 1]
       ; <-- spaces
+  foo)
+```
+
+**NOTE: Parinferish behaves differently.** It does not move the paren:
+
+```out
+(let [foo 1
+      ]; <-- spaces
   foo)
 ```
 
@@ -97,13 +113,24 @@ spaces before the close-paren are not removed.
 )
 ```
 
-```out
+```out-disable
 (let [foo 1
       bar 2]
 
      (+ foo bar))
   ; <-- spaces
 
+```
+
+**NOTE: Parinferish behaves differently.** It only changes indentation:
+
+```out
+(let [foo 1
+      bar 2
+      
+      ] (+ foo bar
+        ); <-- spaces
+ )
 ```
 
 ## Inside the Indentation Treshold
@@ -255,11 +282,19 @@ odd number of quotes not allowed in a comment, so it remains unprocessed:
 ret)
 ```
 
-```out
+```out-disable
 (def foo [a b]
   ; "my string
     ^ error: quote-danger
 ret)
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(def foo [a b]
+  ; "my string
+ ret)
 ```
 
 balanced quotes allowed across contiguous comments:
@@ -320,16 +355,28 @@ But get rid of spaces in paren trail if no cursor is present on the line:
 (foo )
 ```
 
-```out
+```out-disable
 (foo)
+```
+
+**NOTE: Parinferish behaves differently.** It preserves the whitespace:
+
+```out
+(foo )
 ```
 
 ```in
 (foo [1 2 3 ] )
 ```
 
-```out
+```out-disable
 (foo [1 2 3])
+```
+
+**NOTE: Parinferish behaves differently.** It preserves the whitespace:
+
+```out
+(foo [1 2 3 ] )
 ```
 
 ## Cursor Behavior
@@ -364,7 +411,7 @@ Cursor pushed forward when a form is balanced and indented.
 
 When backspacing, preserve the indentation of the child lines.
 
-```in
+```in-disable
 (let     [foo 1
      ----
            ; comment 1
@@ -373,7 +420,7 @@ When backspacing, preserve the indentation of the child lines.
            ; comment 2
 ```
 
-```out
+```out-disable
 (let [foo 1
        ; comment 1
        bar 2
@@ -381,7 +428,25 @@ When backspacing, preserve the indentation of the child lines.
        ; comment 2
 ```
 
+**NOTE: Parinferish behaves differently.** It does not preserve the relative indentation:
+
 ```in
+(let [foo 1
+           ; comment 1
+           bar 2
+           baz 3])
+           ; comment 2
+```
+
+```out
+(let [foo 1
+           ; comment 1
+           bar 2
+           baz 3])
+           ; comment 2
+```
+
+```in-disable
    (def foo
 ---
       ; comment 1
@@ -389,16 +454,32 @@ When backspacing, preserve the indentation of the child lines.
       ; comment 2
 ```
 
-```out
+```out-disable
 (def foo
    ; comment 1
    bar)
    ; comment 2
 ```
 
-When typing before an open-paren, preserve the indentation of the child lines.
+**NOTE: Parinferish behaves differently.** It does not preserve the relative indentation:
 
 ```in
+(def foo
+      ; comment 1
+      bar)
+      ; comment 2
+```
+
+```out
+(def foo
+      ; comment 1
+      bar)
+      ; comment 2
+```
+
+When typing before an open-paren, preserve the indentation of the child lines.
+
+```in-disable
 (def foo (bar
     ++++
        4 5 6
@@ -407,7 +488,7 @@ When typing before an open-paren, preserve the indentation of the child lines.
        ; comment 2
 ```
 
-```out
+```out-disable
 (def foo (bar
            4 5 6
            ; comment 1
@@ -415,9 +496,27 @@ When typing before an open-paren, preserve the indentation of the child lines.
            ; comment 2
 ```
 
-__Multiple changes__:
+**NOTE: Parinferish behaves differently.** It does not preserve the relative indentation:
 
 ```in
+(def foo (bar
+       4 5 6
+       ; comment 1
+       7 8 9))
+       ; comment 2
+```
+
+```out
+(def foo (bar
+          4 5 6
+          ; comment 1
+          7 8 9))
+       ; comment 2
+```
+
+__Multiple changes__:
+
+```in-disable
 (my-fnfoo (if some-condition
  -----+++
          println) my-funfoo {:foo 1
@@ -425,10 +524,24 @@ __Multiple changes__:
                           :bar 2})
 ```
 
-```out
+```out-disable
 (foo (if some-condition
        println) foo {:foo 1
                      :bar 2})
+```
+
+**NOTE: Parinferish behaves differently.** It does not preserve the relative indentation:
+
+```in
+(foo (if some-condition
+         println) foo {:foo 1
+                          :bar 2})
+```
+
+```out
+(foo (if some-condition
+         println) foo {:foo 1
+                          :bar 2})
 ```
 
 ## Extending indentation constraints
@@ -464,9 +577,18 @@ making the invariant no longer equivalent between them.
        4 5 6)
 ```
 
-```out
+```out-disable
 (foo [bar baz]
          ; <-- spaces
+     1 2 3
+     4 5 6)
+```
+
+**NOTE: Parinferish behaves differently.** It does not move the bracket:
+
+```out
+(foo [bar baz
+         ]; <-- spaces
      1 2 3
      4 5 6)
 ```
@@ -476,7 +598,7 @@ making the invariant no longer equivalent between them.
 We return non-empty Paren Trails so plugins can dim them with markers:
 
 
-```in
+```in-disable
 (defn foo
   "hello, this is a docstring"
   [a b]
@@ -486,7 +608,7 @@ We return non-empty Paren Trails so plugins can dim them with markers:
       :prod prod}))
 ```
 
-```out
+```out-disable
 (defn foo
   "hello, this is a docstring"
   [a b]
@@ -504,14 +626,14 @@ We return non-empty Paren Trails so plugins can dim them with markers:
 
 Indent only the first line:
 
-```in
+```in-disable
   (foo
 ++
   (bar
     baz))
 ```
 
-```out
+```out-disable
   (foo
     (bar
       baz))
@@ -519,7 +641,7 @@ Indent only the first line:
 
 Indent first two lines:
 
-```in
+```in-disable
   (foo
 ++
     (bar
@@ -527,7 +649,7 @@ Indent first two lines:
     baz))
 ```
 
-```out
+```out-disable
   (foo
     (bar
       baz))
@@ -535,7 +657,7 @@ Indent first two lines:
 
 Indent last two lines:
 
-```in
+```in-disable
   (foo
       (bar
 ++
@@ -543,7 +665,7 @@ Indent last two lines:
 ++
 ```
 
-```out
+```out-disable
   (foo
       (bar
         baz))
@@ -552,14 +674,14 @@ Indent last two lines:
 
 Indent only the first line:
 
-```in
+```in-disable
   (foo
 ++
   bar
   baz)
 ```
 
-```out
+```out-disable
   (foo
     bar
     baz)
@@ -567,7 +689,7 @@ Indent only the first line:
 
 Indent first two lines:
 
-```in
+```in-disable
   (foo
 ++
     bar
@@ -575,7 +697,7 @@ Indent first two lines:
   baz)
 ```
 
-```out
+```out-disable
   (foo
     bar
     baz)
@@ -583,7 +705,7 @@ Indent first two lines:
 
 Indent last two lines:
 
-```in
+```in-disable
 (foo
     bar
 ++
@@ -591,7 +713,7 @@ Indent last two lines:
 ++
 ```
 
-```out
+```out-disable
 (foo
     bar
     baz)
@@ -605,13 +727,13 @@ We can return the positions of the open-parens whose structure would be
 affected by the indentation of the current cursor line.  This allows editors to
 use them to create tab stops for smart indentation snapping.
 
-```in
+```in-disable
 (def x [1 2 3])
 (def y 2)
 |
 ```
 
-```out
+```out-disable
 (def x [1 2 3])
 (def y 2)
 ^    > tabStops
@@ -621,27 +743,27 @@ use them to create tab stops for smart indentation snapping.
 The `>` means the position of the first arg after an open-paren, because some styles
 use it for alignment.
 
-```in
+```in-disable
 (foo bar
   (baz boo))
 |
 ```
 
-```out
+```out-disable
 (foo bar
   (baz boo))
 ^ ^    > tabStops
 |
 ```
 
-```in
+```in-disable
 (let [a {:foo 1}
       |
       bar [1 2 3]]
   bar)
 ```
 
-```out
+```out-disable
 (let [a {:foo 1}
 ^    ^  ^     > tabStops
       |
@@ -649,14 +771,14 @@ use it for alignment.
   bar)
 ```
 
-```in
+```in-disable
 (let [a {:foo 1}
       bar (func 1 2 3)]
   |
   bar)
 ```
 
-```out
+```out-disable
 (let [a {:foo 1}
       bar (func 1 2 3)]
 ^    ^    ^     > tabStops
