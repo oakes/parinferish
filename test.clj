@@ -7,6 +7,7 @@
         [in out] (-> (str (name mode) "-mode.md")
                      io/resource
                      slurp
+                     (str/replace #"\n.*\^ error:.*" "")
                      (str/split #"```")
                      (->> (filter #(or (str/starts-with? % "in\n")
                                        (str/starts-with? % "out\n")))

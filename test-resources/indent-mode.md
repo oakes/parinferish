@@ -119,10 +119,15 @@ unmatched close-parens _inside_ a line are removed:
 ```in
 (foo [a (|b] c)
 ```
-
-```out
+```
 (foo [a (|b] c)
            ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo [a (|b c)])
 ```
 
 ## Strings
@@ -266,11 +271,19 @@ odd number of quotes (one):
   [:div.td {:style "max-width: 500px;"}])
 ```
 
-```out
+```
 (for [col columns]
   "|
   [:div.td {:style "max-width: 500px;"}])
                                      ^ error: quote-danger
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(for [col columns]
+  "|
+  [:div.td {:style "max-width: 500px);"}])
 ```
 
 But a comment can contain an odd number of quotes if it is in a contiguous group of comments
@@ -359,9 +372,16 @@ Inferred close-parens are inserted after escaped whitespace.
 (def bar \ ; <-- space
 ```
 
-```out
+```
 (def foo \,)
 (def bar \ ); <-- space
+```
+
+**NOTE: Parinferish behaves differently.** It inserts the end paren before the backslash:
+
+```out
+(def foo \,)
+(def bar) \ ; <-- space
 ```
 
 Hanging backslash at end of line is invalid and causes processing to be abandoned.
@@ -454,8 +474,14 @@ Once the cursor leaves the line, the space is removed.
 (def b )
 ```
 
-```out
+```
 (def b)
+```
+
+**NOTE: Parinferish behaves differently.** The space is preserved:
+
+```out
+(def b )
 ```
 
 Another example with more close-parens:
@@ -474,8 +500,14 @@ Once the cursor leaves the line, the space is removed.
 (def b [[c d] ])
 ```
 
-```out
+```
 (def b [[c d]])
+```
+
+**NOTE: Parinferish behaves differently.** The space is preserved:
+
+```out
+(def b [[c d] ])
 ```
 
 ## Cursor Blocking displacement of Paren Trail
@@ -503,9 +535,16 @@ With the cursor at the end of the first line, the indented line below does not a
   ret)
 ```
 
-```out
+```
 (let [a 1])|
   ret
+```
+
+**NOTE: Parinferish behaves differently.** It does not take your cursor into account in indent mode:
+
+```out
+(let [a 1]|
+  ret)
 ```
 
 If this was not allowed, we would not be able to reach this valid state from
@@ -516,9 +555,16 @@ the previous state:
   ret
 ```
 
-```out
+```
 (let [a 1]) 2
   ret
+```
+
+**NOTE: Parinferish behaves differently.** It moves the paren if possible:
+
+```out
+(let [a 1] 2
+  ret)
 ```
 
 But if the cursor is before such a close-paren, we are not in a position to
@@ -590,9 +636,16 @@ It is allowed if the leading parens are also in paren trail:
   ); comment
 ```
 
-```out
+```
 (foo)
   ; comment
+```
+
+**NOTE: Parinferish behaves differently.** It preserves the whitespace:
+
+```out
+(foo
+  ); comment
 ```
 
 If there's more than one, point to the first one.
@@ -623,9 +676,15 @@ Inserting a `(` inside a nested vector:
 (foo [bar (|...] baz)
 ```
 
-```out
+```
 (foo [bar (|...] baz)
                ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo [bar (|... baz)])
 ```
 
 Inserting a `]` inside a nested list:
@@ -634,9 +693,15 @@ Inserting a `]` inside a nested list:
 (foo [bar (]| baz)])
 ```
 
-```out
+```
 (foo [bar (]| baz)])
            ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo [bar (| baz)])
 ```
 
 Inserting a `]` ahead of another inside a list (maybe to "barf" the end of the
@@ -646,9 +711,15 @@ vector).
 [... (foo [bar ]| baz]  ...)]
 ```
 
-```out
+```
 [... (foo [bar ]| baz]  ...)]
                      ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+[... (foo [bar ]| baz  ...)]
 ```
 
 Suppose you just backspaced a `[` below:
@@ -657,9 +728,15 @@ Suppose you just backspaced a `[` below:
 (let [{:keys |foo bar]} my-map])
 ```
 
-```out
+```
 (let [{:keys |foo bar]} my-map])
                      ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(let [{:keys |foo bar} my-map])
 ```
 
 Inserting a matched `)` inside nested expressions sometimes works out:
@@ -688,9 +765,15 @@ But all it takes is one different kind of a paren to keep it from working:
 (f [x (a (b c(|) d) y] g)
 ```
 
-```out
+```
 (f [x (a (b c(|) d) y] g)
                      ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(f [x (a (b c(|) d) y g)])
 ```
 
 Unmatched close-parens on indented lines present similar issues.
@@ -701,10 +784,17 @@ For example, inserting a `)` below:
   bar)| baz) qux
 ```
 
-```out
+```
 (foo
   bar)| baz) qux
            ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo
+  bar)| baz qux
 ```
 
 ```in
@@ -714,11 +804,20 @@ For example, inserting a `)` below:
    bar])
 ```
 
-```out
+```
 (foo
   [bar
    bar)| baz
       ^ error: unmatched-close-paren
+   bar])
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo
+  [bar
+   bar| baz
    bar])
 ```
 
@@ -730,11 +829,19 @@ Or when dedenting a line makes an inner close-paren unmatched:
 |bar) baz
 ```
 
-```out
+```
 (foo
   [bar]
 |bar) baz
     ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo
+  [bar])
+|bar baz
 ```
 
 In the same example, a different similar problem emerges when indenting a line
@@ -746,11 +853,19 @@ makes the same inner close-paren unmatched:
   |bar) baz
 ```
 
-```out
+```
 (foo
  [bar]
   |bar) baz
       ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo
+ [bar
+  |bar baz])
 ```
 
 The same problem demonstrated for another dedenting example:
@@ -761,11 +876,19 @@ The same problem demonstrated for another dedenting example:
  bar]) baz
 ```
 
-```out
+```
 (foo
  [bar
  bar]) baz
     ^ error: unmatched-close-paren
+```
+
+**NOTE: Parinferish behaves differently.** It does not turn itself off:
+
+```out
+(foo
+ [bar]
+ bar) baz
 ```
 
 ## Cursor Shifting
@@ -808,13 +931,13 @@ We can return the positions of the open-parens whose structure would be
 affected by the indentation of the current cursor line.  This allows editors to
 use them to create tab stops for smart indentation snapping.
 
-```in
+```in-disable
 (def x [1 2 3])
 (def y 2)
 |
 ```
 
-```out
+```out-disable
 (def x [1 2 3])
 (def y 2)
 ^    > tabStops
@@ -824,27 +947,27 @@ use them to create tab stops for smart indentation snapping.
 The `>` means the position of the first arg after an open-paren, because some styles
 use it for alignment.
 
-```in
+```in-disable
 (foo bar
   (baz boo))
 |
 ```
 
-```out
+```out-disable
 (foo bar
   (baz boo))
 ^ ^    > tabStops
 |
 ```
 
-```in
+```in-disable
 (let [a {:foo 1}
       |
       bar [1 2 3]]
   bar)
 ```
 
-```out
+```out-disable
 (let [a {:foo 1}
 ^    ^  ^     > tabStops
       |
@@ -853,14 +976,14 @@ use it for alignment.
 ```
 
 
-```in
+```in-disable
 (let [a {:foo 1}
       bar (func 1 2 3)]
   |
   bar)
 ```
 
-```out
+```out-disable
 (let [a {:foo 1}
       bar (func 1 2 3)]
 ^    ^    ^     > tabStops
@@ -872,7 +995,7 @@ use it for alignment.
 
 We return non-empty Paren Trails so plugins can dim them with markers:
 
-```in
+```in-disable
 (defn foo
   "hello, this is a docstring"
   [a b]
@@ -882,7 +1005,7 @@ We return non-empty Paren Trails so plugins can dim them with markers:
       :prod prod}))
 ```
 
-```out
+```out-disable
 (defn foo
   "hello, this is a docstring"
   [a b]
