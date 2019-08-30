@@ -11,6 +11,7 @@
                      (str/split #"```")
                      (->> (filter #(or (str/starts-with? % "in\n")
                                        (str/starts-with? % "out\n")))
+                          (map str/trim)
                           (partition 2)
                           (map (fn [[in out :as pair]]
                                  (when-not (str/starts-with? in "in")
