@@ -1,19 +1,23 @@
 (ns parinferish.core
   (:require [clojure.string :as str])
-  (:refer-clojure :exclude [find flatten])
-  #?(:clj (:import [java.util.regex Pattern Matcher])))
+  (:refer-clojure :exclude [flatten]))
 
-(def ^:private groups
-  [[:newline-and-indent "(\n[ ]*)"]
-   [:whitespace         "([ \\t\\r,]+)"]
-   [:special-char       "(~@|['`~^@])"]
-   [:delimiter          "([\\[\\]{}()]|#\\{)"]
-   [:string             "(\"(?:\\\\.|[^\\\\\"])*\"?)"]
-   [:character          "(\\\\\\S)"]
-   [:backslash          "(\\\\)"]
-   [:comment            "(;.*)"]
-   [:number             "(\\d+\\.?[a-zA-Z\\d]*)"]
-   [:symbol             "([^\\s\\[\\]{}('\"`,;)\\\\]+)"]])
+(def ^:private regexes
+  [[:newline-and-indent #"^\n[ ]*"]
+   [:whitespace         #"^[ \t\r,]+"]
+   [:special-char       #"^['`~^@]"]
+   [:delimiter          #"^[\[\]{}()]"]
+   [:delimiter          #"^#\{"]
+   ;; the next regex only matches the beginning of a string.
+   ;; the rest is read by the parse-string function below.
+   ;; parsing entire strings via regex was causing a stack
+   ;; overflow error, so i'm doing it manually instead
+   [:string             #"^\""]
+   [:character          #"^\\\S"]
+   [:backslash          #"^\\"]
+   [:comment            #"^;.*"]
+   [:number             #"^\d+\.?[a-zA-Z\d]*"]
+   [:symbol             #"^[^\s\[\]{}('\"`,;)\\]+"]])
 
 (def ^:private whitespace?
   #{:newline-and-indent :whitespace :comment
@@ -23,12 +27,6 @@
     ;; to be escaped and turned into a character
     :backslash})
 
-(def ^:private group-range (range 0 (count groups)))
-
-(def ^:private regex-str (->> groups (map second) (str/join "|")))
-(def ^:private regex #?(:clj (re-pattern regex-str)
-                        :cljs (js/RegExp. regex-str "g")))
-
 (def ^:private open-delims #{"#{" "(" "[" "{"})
 (def ^:private close-delims #{"}" ")" "]"})
 (def ^:private delims {"#{" "}"
@@ -36,49 +34,26 @@
                        "[" "]"
                        "{" "}"})
 
-(defprotocol IRegex
-  (find [this])
-  (group [this index])
-  (index [this]))
-
-(defn ->regex [match-str]
-  (let [*matcher #?(:clj (.matcher ^Pattern regex match-str)
-                    :cljs (volatile! (make-array 0)))]
-    (reify IRegex
-      (find [this]
-        #?(:clj  (re-find *matcher)
-           :cljs (when @*matcher (vreset! *matcher (.exec regex match-str)))))
-      (group [this index]
-        #?(:clj  (.group ^Matcher *matcher ^int index)
-           :cljs (aget @*matcher index)))
-      (index [this]
-        #?(:clj  (.start ^Matcher *matcher)
-           :cljs (.-index @*matcher))))))
-
-(defn- read-token [matcher *error *line *column *indent last-token]
-  (let [token (group matcher 0)
-        group (get-in groups
-                [(some #(when (group matcher (inc %)) %) group-range) 0]
-                :whitespace)
-        token-data [(if (and (= group :symbol)
+(defn- read-token [group-name token *error *line *column *indent last-token]
+  (let [token-data [(if (and (= group-name :symbol)
                              (str/starts-with? token ":"))
                       :keyword
-                      group)
+                      group-name)
                     token]
-        line (if (= group :newline-and-indent)
+        line (if (= group-name :newline-and-indent)
                (vswap! *line inc)
                @*line)
-        start-column (if (= group :newline-and-indent)
+        start-column (if (= group-name :newline-and-indent)
                        -1
                        @*column)
-        end-column (if (= group :newline-and-indent)
+        end-column (if (= group-name :newline-and-indent)
                      (vreset! *column (dec (count token)))
                      (vswap! *column + (count token)))
         indent (cond
-                 (and (= :delimiter group)
+                 (and (= :delimiter group-name)
                       (open-delims token))
                  (vreset! *indent end-column)
-                 (= group :newline-and-indent)
+                 (= group-name :newline-and-indent)
                  (vreset! *indent (dec (count token)))
                  :else
                  @*indent)
@@ -87,12 +62,12 @@
                      :column start-column
                      :indent indent)]
     (cond-> token-data
-            (whitespace? group)
+            (whitespace? group-name)
             (vary-meta assoc :whitespace? true)
-            (and (= group :string)
+            (and (= group-name :string)
                  (not (str/ends-with? token "\"")))
             (vary-meta assoc :error-message (vreset! *error "Unbalanced quote"))
-            (and (= group :newline-and-indent)
+            (and (= group-name :newline-and-indent)
                  (= (first last-token) :backslash))
             (vary-meta assoc :error-message (vreset! *error "Backslash at end of line")))))
 
@@ -305,6 +280,20 @@
       :else
       token-data)))
 
+(defn- parse-string [token input-str]
+  (loop [token token
+         input-str (subs input-str (count token))]
+    (if-let [ch (first input-str)]
+      (case ch
+        \\
+        (if (> (count input-str) 1)
+          (recur (str token (subs input-str 0 2)) (subs input-str 2))
+          (str token ch))
+        \"
+        (str token ch)
+        (recur (str token ch) (subs input-str 1)))
+      token)))
+
 (defn parse
   ([s]
    (parse s {}))
@@ -313,16 +302,23 @@
               (or (nil? (:cursor-line opts))
                   (nil? (:cursor-column opts))))
      (throw (ex-info "Smart mode requires :cursor-line and :cursor-column" {})))
-   (let [matcher (->regex s)
-         *error (volatile! nil)
+   (let [*error (volatile! nil)
          *line (volatile! 0)
          *column (volatile! 0)
          *indent (volatile! 0)
-         tokens (loop [tokens (transient [])
+         tokens (loop [input-str s
+                       tokens (transient [])
                        last-token nil]
-                  (if (find matcher)
-                    (let [token (read-token matcher *error *line *column *indent last-token)]
-                      (recur (conj! tokens token) token))
+                  (if-let [[group-name token]
+                           (some (fn [[group-name regex]]
+                                   (when-let [match (re-find regex input-str)]
+                                     [group-name match]))
+                                 regexes)]
+                    (let [token (if (= group-name :string)
+                                  (parse-string token input-str)
+                                  token)
+                          token-data (read-token group-name token *error *line *column *indent last-token)]
+                      (recur (subs input-str (count token)) (conj! tokens token-data) token-data))
                     (persistent! tokens)))
          opts (assoc opts
                 :*error *error
