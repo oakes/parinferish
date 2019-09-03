@@ -370,14 +370,26 @@
         (vreset! *column -1))
       (run! (partial diff-node *line *column *diff node) children))
     (let [line @*line
-          column @*column]
+          column @*column
+          parent-meta (meta parent-node)]
       (vswap! *column + (count node))
-      (when-let [action (:action (meta parent-node))]
-        (vswap! *diff conj {:line line
-                            :column column
-                            :content node
-                            :action action
-                            :type (first parent-node)})
+      (when-let [action (:action parent-meta)]
+        (let [last-diff (last @*diff)]
+          ;; if we are removing the thing we just inserted,
+          ;; the actions cancel each other out
+          ;; so just remove both from the diff
+          (if (and last-diff
+                   (= action :remove)
+                   (= (:action last-diff) :insert)
+                   (= line (:line last-diff))
+                   (= 1 (- column (:column last-diff)))
+                   (= node (:content last-diff)))
+            (vswap! *diff pop)
+            (vswap! *diff conj {:line line
+                                :column column
+                                :content node
+                                :action action
+                                :type (first parent-node)})))
         (when (= action :remove)
           (vswap! *column - (count node)))))))
 
