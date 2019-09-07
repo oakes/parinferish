@@ -1,4 +1,4 @@
-(defproject parinferish "0.7.0-SNAPSHOT"
+(defproject parinferish "0.6.2"
   :description "A library for parsing and optionally applying parinfer(ish) to Clojure code"
   :url "https://github.com/oakes/parinferish"
   :license {:name "Public Domain"
