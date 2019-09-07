@@ -98,7 +98,7 @@
     (into (conj first-data token-data)
           last-data)))
 
-(defn read-next-tokens-with-indent [flat-tokens {:keys [*index] :as opts}]
+(defn- read-next-tokens-with-indent [flat-tokens {:keys [*index] :as opts}]
   (loop [data []
          ignore-data []
          last-index @*index
@@ -295,9 +295,14 @@
       token)))
 
 (defn parse
-  ([s]
-   (parse s {}))
-  ([s opts]
+  "Returns a hierarcichal (I can never spell that goddamn word) vector of tuples
+  representing each distinct Clojure token from the input string. Takes an options
+  map that allows you to apply parinferish via the :mode option (:indent, :paren, :smart).
+  Note that if you use parinfer, the return value will include both the inserted and removed
+  tokens. The tokens parinfer wants to remove will be removed by the `flatten` function."
+  ([input]
+   (parse input {}))
+  ([input opts]
    (when (and (= :smart (:mode opts))
               (or (nil? (:cursor-line opts))
                   (nil? (:cursor-column opts))))
@@ -306,7 +311,7 @@
          *line (volatile! 0)
          *column (volatile! 0)
          *indent (volatile! 0)
-         tokens (loop [input-str s
+         tokens (loop [input-str input
                        tokens (transient [])
                        last-token nil]
                   (if-let [[group-name token]
@@ -348,6 +353,9 @@
       (conj nodes (node-fn node)))))
 
 (defn flatten
+  "Takes the result of `parse` and flattens it into a string. Optionally takes a
+  `node-fn` which will receive each token and return whatever it wants, so you can
+  have more control of what format it outputs to."
   ([parsed-code]
    (->> parsed-code
         (flatten #(-> % rest str/join))
@@ -393,7 +401,10 @@
         (when (= action :remove)
           (vswap! *column - (count node)))))))
 
-(defn diff [parsed-code]
+(defn diff
+  "Takes the result of `parse` and returns a vector of maps describing
+  each insertion or removal made by parinferish."
+  [parsed-code]
   (let [*line (volatile! 0)
         *column (volatile! 0)
         *diff (volatile! [])
