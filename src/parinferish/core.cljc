@@ -16,7 +16,7 @@
    [:character          #"^\\\S"]
    [:backslash          #"^\\"]
    [:comment            #"^;.*"]
-   [:number             #"^\d+\.?[a-zA-Z\d]*"]
+   [:number             #"^\d+[/\.]?[a-zA-Z\d]*"]
    [:symbol             #"^[^\s\[\]{}('\"`,;)\\]+"]])
 
 (def ^:private whitespace?
