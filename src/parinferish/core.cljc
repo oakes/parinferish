@@ -34,15 +34,23 @@
                        "[" "]"
                        "{" "}"})
 
+(defn- count-newlines [s]
+  (let [*counter (volatile! 0)]
+    (doseq [ch s]
+      (when (= ch \newline)
+        (vswap! *counter inc)))
+    @*counter))
+
 (defn- read-token [group-name token *error *line *column *indent last-token]
   (let [token-data [(if (and (= group-name :symbol)
                              (str/starts-with? token ":"))
                       :keyword
                       group-name)
                     token]
-        line (if (= group-name :newline-and-indent)
-               (vswap! *line inc)
-               @*line)
+        line (cond
+               (= group-name :newline-and-indent) (vswap! *line inc)
+               (= group-name :string) (vswap! *line + (count-newlines token))
+               :else @*line)
         start-column (if (= group-name :newline-and-indent)
                        -1
                        @*column)
@@ -373,9 +381,13 @@
 (defn- diff-node [*line *column *diff parent-node node]
   (if (vector? node)
     (let [[type & children] node]
-      (when (= type :newline-and-indent)
-        (vswap! *line inc)
-        (vreset! *column -1))
+      (cond
+        (= type :newline-and-indent)
+        (do
+          (vswap! *line inc)
+          (vreset! *column -1))
+        (= type :string)
+        (vswap! *line + (count-newlines (first children))))
       (run! (partial diff-node *line *column *diff node) children))
     (let [line @*line
           column @*column
