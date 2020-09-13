@@ -41,6 +41,10 @@
         (vswap! *counter inc)))
     @*counter))
 
+(defn- count-last-line [s]
+  (when-let [index (str/last-index-of s \newline)]
+    (count (subs s (inc index)))))
+
 (defn- read-token [group-name token *error *line *column *indent last-token]
   (let [token-data [(if (and (= group-name :symbol)
                              (str/starts-with? token ":"))
@@ -54,8 +58,15 @@
         start-column (if (= group-name :newline-and-indent)
                        -1
                        @*column)
-        end-column (if (= group-name :newline-and-indent)
+        end-column (cond
+                     (= group-name :newline-and-indent)
                      (vreset! *column (dec (count token)))
+                     (= group-name :string)
+                     ;; multiline strings need to reset the column number correctly
+                     (if-let [n (count-last-line token)]
+                       (vreset! *column n)
+                       (vswap! *column + (count token)))
+                     :else
                      (vswap! *column + (count token)))
         indent (cond
                  (and (= :delimiter group-name)
@@ -392,7 +403,12 @@
     (let [line @*line
           column @*column
           parent-meta (meta parent-node)]
-      (vswap! *column + (count node))
+      (if (= :string (first parent-node))
+        ;; multiline strings need to reset the column number correctly
+        (if-let [n (count-last-line node)]
+          (vreset! *column n)
+          (vswap! *column + (count node)))
+        (vswap! *column + (count node)))
       (when-let [action (:action parent-meta)]
         (let [last-diff (last @*diff)]
           ;; if we are removing the thing we just inserted,
