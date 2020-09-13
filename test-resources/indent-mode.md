@@ -1018,3 +1018,31 @@ We return non-empty Paren Trails so plugins can dim them with markers:
       :prod prod}))
                 ^^^ parenTrail
 ```
+
+**NOTE: This is a fix added by Parinferish.**
+
+Mismatched parens following multiline strings are corrected regardless of indentation.
+
+```in
+(def shader
+  '{:inputs {a_position vec2}
+    :outputs {v_color vec4}
+    :functions "
+void main()
+{
+    gl_Position = vec4(a_position.x, a_position.y, 0.0, 1.0);
+    v_color = gl_Position * 0.5 + 0.5;
+}")
+```
+
+```out
+(def shader
+  '{:inputs {a_position vec2}
+    :outputs {v_color vec4}
+    :functions "
+void main()
+{
+    gl_Position = vec4(a_position.x, a_position.y, 0.0, 1.0);
+    v_color = gl_Position * 0.5 + 0.5;
+}"})
+```
