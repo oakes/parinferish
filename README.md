@@ -12,6 +12,8 @@ Compared to the real parinfer, parinferish...
 2. Doesn't ever change code when only the cursor position changes (and only smart mode requires the cursor position at all)
 3. Has no basis in math, logic, or sanity...the only basis for any behavior is my own preferences and bugs.
 
+See [html-soup](https://github.com/oakes/html-soup) for an example of a library that uses parinferish as a parser.
+
 ## Licensing
 
 All files that originate from this project are dedicated to the public domain. I would love pull requests, and will assume that they are also dedicated to the public domain.
