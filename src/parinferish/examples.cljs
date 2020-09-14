@@ -1,5 +1,6 @@
 (ns parinferish.examples
-  (:require [parinferish.core])
+  (:require parinferish.core
+            dynadoc.core)
   (:require-macros [dynadoc.example :refer [defexample defexamples]]))
 
 (defexample parinferish.core/parse

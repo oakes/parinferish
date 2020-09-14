@@ -1,4 +1,4 @@
-{:main          parinferish.dev
+{:main          parinferish.examples
  :optimizations :simple
  :output-to     "dev-resources/dynadoc-extend/main.js"
  :output-dir    "dev-resources/dynadoc-extend/main.out"

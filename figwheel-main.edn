@@ -1,1 +1,2 @@
-{:open-url "http://localhost:5000/cljs/parinferish.core"}
+{:open-url "http://localhost:5000/cljs/parinferish.core"
+ :clean-outputs true}
